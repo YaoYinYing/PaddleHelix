@@ -4,20 +4,19 @@ The AlphaFold series has transformed protein structure prediction with remarkabl
 
 The PaddleHelix team is working on [HelixFold3](./helixfold3_report.pdf) to replicate the advanced capabilities of AlphaFold3. Insights from the AlphaFold3 paper inform our approach and build on our prior work with [HelixFold](https://arxiv.org/abs/2207.05477), [HelixFold-Single](https://doi.org/10.1038/s42256-023-00721-6), [HelixFold-Multimer](https://arxiv.org/abs/2404.10260), and [HelixDock](https://arxiv.org/abs/2310.13913). Currently, HelixFold3's accuracy in predicting the structures of small molecule ligands, nucleic acids (including DNA and RNA), and proteins is comparable to that of AlphaFold3. We are committed to continuously enhancing the model's performance and rigorously evaluating it across a broader range of biological molecules. Please refer to our [HelixFold3 technical report](./helixfold3_report.pdf) for more details.
 
+
+<!-- <img src="./demo_output/6zcy_demo_result.png" alt="demo" align="middle" style="margin-left: 25%; margin-right: 25%; width: 50%; margin-bottom: 20px;" /> -->
+
+
 <!-- <p align="center"> -->
-<img src="images/ligands_posebusters_v1.png" align="left" height="60%" width="50%" />
+<img src="images/ligands_posebusters_v1.png" align="left" height="60%" width="50%" style="padding-left: 10px;"/>
 
 
-<img src="images/proteins_heter_v2_success_rate.png" align="left" height="60%" width="40%" />
+<img src="images/proteins_heter_v2_success_rate.png" align="right" height="60%" width="40%" style="padding-right: 10px;"/>
 <br></br>
 
-<img src="images/NA_casp15.png"/>
-<!-- </p> -->
-
+<img src="images/NA_casp15.png" style="display: block; width: 100%; padding-top: 10px;">
 <br>
-<!-- <p align="center">
-<img src="images/proteins_heter_v2_success_rate.png" align="right" height="60%" width="30%" />
-</p> -->
 
 
 
@@ -40,8 +39,7 @@ HelixFold3 depends on [PaddlePaddle](https://github.com/paddlepaddle/paddle). Py
 is provided in `requirements.txt`. `kalign`, the [`HH-suite`](https://github.com/soedinglab/hh-suite) and `jackhmmer` are 
 also needed to produce multiple sequence alignments. The download scripts require `aria2c`. 
 
-We provide a script `setup_env.sh` that sets up a `conda` environment and installs all dependencies. The name of the 
-environment and CUDA version can be modified in `setup_env.sh`. Locate to the directory of `helixfold` then run:
+Locate to the directory of `helixfold` then run:
 
 ```bash
 # Install py env
@@ -94,9 +92,34 @@ The script `scripts/download_all_data.sh` can be used to download and set up all
     will download a reduced version of the databases to be used with the `reduced_dbs` preset. The total download 
     size for the reduced databases is around 190 GB, and the total unzipped size is around 530 GB.
 
+#### Understanding Model Input
+
+There are some demo input under `./data/` for your test and reference. Data input is in the form of JSON containing
+several entities such as `protein`, `ligand`, `nucleic acids`, and `iron`. Proteins and nucleic acids inputs are their sequence.
+HelixFold3 supports input ligand as SMILES or CCD id, please refer to `/data/demo_6zcy_smiles.json` and `demo_output/demo_6zcy_smiles/` 
+for more details about SMILES input. More flexible input will come in soon.
+
+A example of input data is as follows:
+```json
+{
+    "entities": [
+        {
+            "type": "protein",
+            "sequence": "MDTEVYESPYADPEEIRPKEVYLDRKLLTLEDKELGSGNFGTVKKGYYQMKKVVKTVAVKILKNEANDPALKDELLAEANVMQQLDNPYIVRMIGICEAESWMLVMEMAELGPLNKYLQQNRHVKDKNIIELVHQVSMGMKYLEESNFVHRDLAARNVLLVTQHYAKISDFGLSKALRADENYYKAQTHGKWPVKWYAPECINYYKFSSKSDVWSFGVLMWEAFSYGQKPYRGMKGSEVTAMLEKGERMGCPAGCPREMYDLMNLCWTYDVENRPGFAAVELRLRNYYYDVVNHHHHHH",
+            "count": 1
+        },
+        {
+            "type": "ligand",
+            "ccd": "QF8",
+            "count": 1
+        }
+    ]
+}
+```
+
 #### Running HelixFold for Inference
 To run inference on a sequence or multiple sequences using HelixFold3's pretrained parameters, run e.g.:
-* Inference on single GPU:
+* Inference on single GPU (change the settings in script BEFORE you run it)
 ```
 sh run_infer.sh
 ```
@@ -107,19 +130,20 @@ The script is as follows,
 
 PYTHON_BIN="PATH/TO/YOUR/PYTHON"
 ENV_BIN="PATH/TO/YOUR/ENV"
-MAXIT_BIN="PATH/TO/MAXIT/SRC"
+MAXIT_SRC="PATH/TO/MAXIT/SRC"
 DATA_DIR="PATH/TO/DATA"
 export OBABEL_BIN="PATH/TO/OBABEL/BIN"
 export PATH="$MAXIT_BIN/bin:$PATH"
 
 CUDA_VISIBLE_DEVICES=0 "$PYTHON_BIN" inference.py \
-    --maxit_binary "$MAXIT_BIN/bin/maxit" \
+    --maxit_binary "$MAXIT_SRC/bin/maxit" \
     --jackhmmer_binary_path "$ENV_BIN/jackhmmer" \
 	--hhblits_binary_path "$ENV_BIN/hhblits" \
 	--hhsearch_binary_path "$ENV_BIN/hhsearch" \
 	--kalign_binary_path "$ENV_BIN/kalign" \
 	--hmmsearch_binary_path "$ENV_BIN/hmmsearch" \
 	--hmmbuild_binary_path "$ENV_BIN/hmmbuild" \
+    --nhmmer_binary_path "$ENV_BIN/nhmmer" \
     --preset='reduced_dbs' \
     --bfd_database_path "$DATA_DIR/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt" \
     --small_bfd_database_path "$DATA_DIR/small_bfd/bfd-first_non_consensus_sequences.fasta" \
@@ -142,8 +166,9 @@ CUDA_VISIBLE_DEVICES=0 "$PYTHON_BIN" inference.py \
     --precision "fp32"
 ```
 The descriptions of the above script are as follows:
-* Replace `MAXIT_SRC` with your installed maxit's root path.
+* Replace `MAXIT_SRC` with your installed `maxit`'s root path.
 * Replace `DATA_DIR` with your downloaded data path.
+* Replace `OBABEL_BIN` with your installed `openbabel` path.
 * Replace `ENV_BIN` with your conda virtual environment or any environment where `hhblits`, `hmmsearch` and other dependencies have been installed.
 * `--preset` - Set `'reduced_dbs'` to use small bfd or `'full_dbs'` to use full bfd.
 * `--*_database_path` - Path to datasets you have downloaded.
