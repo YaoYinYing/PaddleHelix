@@ -1,0 +1,59 @@
+defaults:
+  - _self_
+
+# General configuration
+
+bf16_infer: false  # Corresponds to --bf16_infer
+seed: null  # Corresponds to --seed
+logging_level: DEBUG  # Corresponds to --logging_level
+job_id: 'structure_prediction'  # Corresponds to --model_name
+weight_path: /mnt/db/weights/helixfold/HelixFold3-params-240814/HelixFold3-240814.pdparams  # Corresponds to --init_model
+precision: fp32  # Corresponds to --precision
+amp_level: O1  # Corresponds to --amp_level
+infer_times: 1  # Corresponds to --infer_times
+diff_batch_size: -1  # Corresponds to --diff_batch_size
+use_small_bfd: false # Corresponds to --use_small_bfd
+
+# File paths
+
+input: null  # Corresponds to --input_json, required field
+output: null  # Corresponds to --output_dir, required field
+
+
+# Binary tool paths, leave them as null to find proper ones under PATH or conda bin path
+bin:
+  jackhmmer: null    # Corresponds to --jackhmmer_binary_path
+  hhblits: null  # Corresponds to --hhblits_binary_path
+  hhsearch: null   # Corresponds to --hhsearch_binary_path
+  kalign: null  # Corresponds to --kalign_binary_path
+  hmmsearch: null  # Corresponds to --hmmsearch_binary_path
+  hmmbuild: null  # Corresponds to --hmmbuild_binary_path
+  nhmmer: null  # Corresponds to --nhmmer_binary_path
+  obabel: null
+
+# Database paths
+db:
+  uniprot: /mnt/db/uniprot/uniprot.fasta  # Corresponds to --uniprot_database_path, required field
+  pdb_seqres: /mnt/db/pdb_seqres/pdb_seqres.txt  # Corresponds to --pdb_seqres_database_path, required field
+  uniref90: /mnt/db/uniref90/uniref90.fasta  # Corresponds to --uniref90_database_path, required field
+  mgnify: /mnt/db/mgnify/mgy_clusters.fa  # Corresponds to --mgnify_database_path, required field
+  bfd: /mnt/db/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt  # Corresponds to --bfd_database_path
+  small_bfd: null  # Corresponds to --small_bfd_database_path
+  uniclust30: /mnt/db/uniref30_uc30/UniRef30_2022_02/UniRef30_2022_02  # Corresponds to --uniclust30_database_path
+  rfam: /mnt/db/helixfold/rna/Rfam-14.9_rep_seq.fasta  # Corresponds to --rfam_database_path, required field
+  ccd_preprocessed: /mnt/db/ccd/ccd_preprocessed_etkdg.pkl.gz  # Corresponds to --ccd_preprocessed_path, required field
+
+# Template and PDB information
+template:
+  mmcif_dir: /mnt/db/pdb_mmcif/mmcif_files  # Corresponds to --template_mmcif_dir, required field
+  max_date: '2023-03-15'  # Corresponds to --max_template_date, required field
+  obsolete_pdbs: /mnt/db/pdb_mmcif/obsolete.dat  # Corresponds to --obsolete_pdbs_path, required field
+
+# Preset configuration
+preset:
+  preset: full_dbs  # Corresponds to --preset, choices=['reduced_dbs', 'full_dbs']
+
+# Other configurations
+other:
+  maxit_binary: /mnt/data/yinying/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
+  no_msa_templ_feats: false  # Corresponds to --no_msa_templ_feats

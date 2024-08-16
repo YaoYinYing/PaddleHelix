@@ -16,7 +16,6 @@
 import re
 import os
 import copy
-import argparse
 import random
 import paddle
 import json
@@ -25,6 +24,11 @@ import pathlib
 import shutil
 import logging
 import numpy as np
+import shutil
+
+from omegaconf import DictConfig
+import hydra
+
 from helixfold.common import all_atom_pdb_save
 from helixfold.model import config, utils
 from helixfold.data import pipeline_parallel as pipeline
@@ -34,12 +38,14 @@ from helixfold.data import pipeline_rna_multimer
 from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
-from utils.utils import get_custom_amp_list
-from utils.model import RunModel
-from utils.misc import set_logging_level
+from helixfold.utils.utils import get_custom_amp_list
+from helixfold.utils.model import RunModel
+from helixfold.utils.misc import set_logging_level
 from typing import Dict
-from infer_scripts import feature_processing_aa, preprocess
-from infer_scripts.tools import mmcif_writer
+from helixfold.infer_scripts import feature_processing_aa, preprocess
+from helixfold.infer_scripts.tools import mmcif_writer
+
+script_path=os.path.dirname(__file__)
 
 ALLOWED_LIGAND_BONDS_TYPE_MAP = preprocess.ALLOWED_LIGAND_BONDS_TYPE_MAP
 INVERSE_ALLOWED_LIGAND_BONDS_TYPE_MAP = {
@@ -105,45 +111,57 @@ def convert_to_json_compatible(obj):
         return [convert_to_json_compatible(i) for i in obj]
     else:
         return obj
-    
-def get_msa_templates_pipeline(args) -> Dict:
-    use_precomputed_msas = True # FLAGS.use_precomputed_msas
+
+def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
+    """Helper function to resolve the binary path."""
+    if cfg_path and os.path.isfile(cfg_path):
+        return cfg_path
+
+    if cfg_val:=shutil.which(default_binary_name):
+        logging.warning(f'Using resolved {default_binary_name}: {cfg_val}')
+        return cfg_val
+
+    raise FileNotFoundError(f"Could not find a proper binary path for {default_binary_name}: {cfg_path}.")
+
+def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
+    use_precomputed_msas = True  # Assuming this is a constant or should be set globally
+
     template_searcher = hmmsearch.Hmmsearch(
-        binary_path=args.hmmsearch_binary_path,
-        hmmbuild_binary_path=args.hmmbuild_binary_path,
-        database_path=args.pdb_seqres_database_path)
+        binary_path=resolve_bin_path(cfg.bin.hmmsearch, 'hmmsearch'),
+        hmmbuild_binary_path=resolve_bin_path(cfg.bin.hmmbuild, 'hmmbuild'),
+        database_path=cfg.db.pdb_seqres)
 
     template_featurizer = templates.HmmsearchHitFeaturizer(
-        mmcif_dir=args.template_mmcif_dir,
-        max_template_date=args.max_template_date,
+        mmcif_dir=cfg.template.mmcif_dir,
+        max_template_date=cfg.template.max_date,
         max_hits=MAX_TEMPLATE_HITS,
-        kalign_binary_path=args.kalign_binary_path,
+        kalign_binary_path=resolve_bin_path(cfg.bin.kalign, 'kalign'),
         release_dates_path=None,
-        obsolete_pdbs_path=args.obsolete_pdbs_path)
+        obsolete_pdbs_path=cfg.template.obsolete_pdbs)
 
     monomer_data_pipeline = pipeline.DataPipeline(
-        jackhmmer_binary_path=args.jackhmmer_binary_path,
-        hhblits_binary_path=args.hhblits_binary_path,
-        hhsearch_binary_path=args.hhsearch_binary_path,
-        uniref90_database_path=args.uniref90_database_path,
-        mgnify_database_path=args.mgnify_database_path,
-        bfd_database_path=args.bfd_database_path,
-        uniclust30_database_path=args.uniclust30_database_path,
-        small_bfd_database_path=args.small_bfd_database_path ,
+        jackhmmer_binary_path=resolve_bin_path(cfg.bin.jackhmmer, 'jackhmmer'),
+        hhblits_binary_path=resolve_bin_path(cfg.bin.hhblits, 'hhblits'),
+        hhsearch_binary_path=resolve_bin_path(cfg.bin.hhsearch, 'hhsearch'),
+        uniref90_database_path=cfg.db.uniref90,
+        mgnify_database_path=cfg.db.mgnify,
+        bfd_database_path=cfg.db.bfd,
+        uniclust30_database_path=cfg.db.uniclust30,
+        small_bfd_database_path=cfg.db.small_bfd,
         template_searcher=template_searcher,
         template_featurizer=template_featurizer,
-        use_small_bfd=args.use_small_bfd,
+        use_small_bfd=cfg.use_small_bfd,
         use_precomputed_msas=use_precomputed_msas)
 
     prot_data_pipeline = pipeline_multimer.DataPipeline(
         monomer_data_pipeline=monomer_data_pipeline,
-        jackhmmer_binary_path=args.jackhmmer_binary_path,
-        uniprot_database_path=args.uniprot_database_path,
+        jackhmmer_binary_path=resolve_bin_path(cfg.bin.jackhmmer, 'jackhmmer'),
+        uniprot_database_path=cfg.db.uniprot,
         use_precomputed_msas=use_precomputed_msas)
 
     rna_monomer_data_pipeline = pipeline_rna.RNADataPipeline(
-      hmmer_binary_path=args.nhmmer_binary_path,
-      rfam_database_path=args.rfam_database_path,
+      hmmer_binary_path=resolve_bin_path(cfg.bin.nhmmer, 'nhmmer'),
+      rfam_database_path=cfg.db.rfam,
       rnacentral_database_path=None,
       nt_database_path=None,     
       species_identifer_map_path=None,
@@ -156,7 +174,6 @@ def get_msa_templates_pipeline(args) -> Dict:
         'protein': prot_data_pipeline,
         'rna': rna_data_pipeline
     }
-
 def ranking_all_predictions(output_dirs):
     ranking_score_path_map = {}
     for outpath in output_dirs:
@@ -176,27 +193,29 @@ def ranking_all_predictions(output_dirs):
         rank_id += 1
 
 @paddle.no_grad()
-def eval(args, model, batch):
-    """evaluate a given dataset"""
+def eval(cfg: DictConfig, model:RunModel, batch):
+    """Evaluate a given dataset"""
     model.eval()       
         
-    # inference
+    # Inference
     def _forward_with_precision(batch):
-        if args.precision == "bf16" or args.bf16_infer:
+        precision=cfg.precision
+        if precision not in ('bf16','fp32',):
+            raise ValueError("Please choose precision from bf16 and fp32!")
+
+        if cfg.precision == "bf16" or cfg.bf16_infer:
             black_list, white_list = get_custom_amp_list()
             with paddle.amp.auto_cast(enable=True,
-                                        custom_white_list=white_list, 
-                                        custom_black_list=black_list, 
-                                        level=args.amp_level, 
-                                        dtype='bfloat16'):
+                                      custom_white_list=white_list, 
+                                      custom_black_list=black_list, 
+                                      level=cfg.amp_level, 
+                                      dtype='bfloat16'):
                 return model(batch, compute_loss=False)
-        elif args.precision == "fp32":
-            return model(batch, compute_loss=False)
-        else:
-            raise ValueError("Please choose precision from bf16 and fp32! ")
+
+        return model(batch, compute_loss=False)
         
     res = _forward_with_precision(batch)
-    logger.info(f"Inference Succeeds...\n")
+    logger.info("Inference Succeeds...\n")
     return res
 
 
@@ -430,52 +449,55 @@ def split_prediction(pred, rank):
     return prediction
 
 
-def main(args):
-    set_logging_level(args.logging_level)
+@hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
+def main(cfg: DictConfig):
+    set_logging_level(cfg.logging_level)
 
     """main function"""
     new_einsum = os.getenv("FLAGS_new_einsum", True)
     print(f'>>> PaddlePaddle commit: {paddle.version.commit}')
     print(f'>>> FLAGS_new_einsum: {new_einsum}')
-    print(f'>>> args:\n{args}')
+    print(f'>>> config:\n{cfg}')
 
-    all_entitys = preprocess_json_entity(args.input_json, args.output_dir)
+    all_entitys = preprocess_json_entity(cfg.input, cfg.output)
     ## check maxit binary path
-    if args.maxit_binary is not None:
-        assert os.path.exists(args.maxit_binary), \
-            f"The maxit binary path {args.maxit_binary} does not exists."
+    maxit_binary=resolve_bin_path(cfg.other.maxit_binary,'maxit')
+    
+    RCSBROOT=os.path.dirname(maxit_binary)
+    os.environ['RCSBROOT']=RCSBROOT
 
+    ## check obabel
+    obabel_bin=resolve_bin_path(cfg.bin.obabel,'obabel')
+    os.environ['OBABEL_BIN']=obabel_bin
 
-    ### set seed for reproduce experiment results
-    seed = args.seed
+    ### Set seed for reproducibility
+    seed = cfg.seed
     if seed is None:
         seed = np.random.randint(10000000)
     else:
-        logger.warning('seed is only used for reproduction')
+        logger.warning('Seed is only used for reproduction')
     init_seed(seed)
 
-
-    use_small_bfd = args.preset == 'reduced_dbs'
-    setattr(args, 'use_small_bfd', use_small_bfd)
+    use_small_bfd = cfg.preset.preset == 'reduced_dbs'
+    setattr(cfg, 'use_small_bfd', use_small_bfd)
     if use_small_bfd:
-        assert args.small_bfd_database_path is not None
+        assert cfg.db.small_bfd is not None
     else:
-        assert args.bfd_database_path is not None
-        assert args.uniclust30_database_path is not None
+        assert cfg.db.bfd is not None
+        assert cfg.db.uniclust30 is not None
 
     logger.info('Getting MSA/Template Pipelines...')
     msa_templ_data_pipeline_dict = get_msa_templates_pipeline(args)
         
-
-    ### create model
-    model_config = config.model_config(args.model_name)
-    print(f'>>> model_config:\n{model_config}')
+    ### Create model
+    model_config = config.model_config(cfg.job_id)
+    #print(f'>>> model_config:\n{model_config}')
 
     model = RunModel(model_config)
 
-    if (not args.init_model is None) and (not args.init_model == ""):
-        print(f"Load pretrain model from {args.init_model}")
-        pd_params = paddle.load(args.init_model)
+    if (not cfg.weight_path is None) and (cfg.weight_path != ""):
+        print(f"Load pretrain model from {cfg.weight_path}")
+        pd_params = paddle.load(cfg.weight_path)
         
         has_opt = 'optimizer' in pd_params
         if has_opt:
@@ -483,42 +505,46 @@ def main(args):
         else:
             model.helixfold.set_state_dict(pd_params)
     
-    if args.precision == "bf16" and args.amp_level == "O2":
+    if cfg.precision == "bf16" and cfg.amp_level == "O2":
         raise NotImplementedError("bf16 O2 is not supported yet.")
 
     print(f"============ Data Loading ============")
-    job_base = pathlib.Path(args.input_json).stem
-    output_dir_base = pathlib.Path(args.output_dir).joinpath(job_base)
+    job_base = pathlib.Path(cfg.input).stem
+    output_dir_base = pathlib.Path(cfg.output).joinpath(job_base)
     msa_output_dir = output_dir_base.joinpath('msas')
     msa_output_dir.mkdir(parents=True, exist_ok=True)
 
     features_pkl = output_dir_base.joinpath('final_features.pkl')
-    feature_dict = feature_processing_aa.process_input_json(
-                    all_entitys, 
-                    ccd_preprocessed_path=args.ccd_preprocessed_path,
-                    msa_templ_data_pipeline_dict=msa_templ_data_pipeline_dict,
-                    msa_output_dir=msa_output_dir)
+    if features_pkl.exists():
+        with open(features_pkl, 'rb') as f:
+            feature_dict = pickle.load(f)
+    else:
+        feature_dict = feature_processing_aa.process_input_json(
+                        all_entitys, 
+                        ccd_preprocessed_path=cfg.db.ccd_preprocessed,
+                        msa_templ_data_pipeline_dict=msa_templ_data_pipeline_dict,
+                        msa_output_dir=msa_output_dir)
 
-    # save features
-    with open(features_pkl, 'wb') as f:
-        pickle.dump(feature_dict, f, protocol=4)
+        # save features
+        with open(features_pkl, 'wb') as f:
+            pickle.dump(feature_dict, f, protocol=4)
 
     feature_dict['feat'] = batch_convert(feature_dict['feat'], add_batch=True)
     feature_dict['label'] = batch_convert(feature_dict['label'], add_batch=True)
     
     print(f"============ Start Inference ============")
     
-    infer_times = args.infer_times
-    if args.diff_batch_size > 0:
-        model_config.model.heads.diffusion_module.test_diff_batch_size = args.diff_batch_size
+    infer_times = cfg.infer_times
+    if cfg.diff_batch_size > 0:
+        model_config.model.heads.diffusion_module.test_diff_batch_size = cfg.diff_batch_size
     diff_batch_size = model_config.model.heads.diffusion_module.test_diff_batch_size 
     logger.info(f'Inference {infer_times} Times...')
-    logger.info(f" diffusion batch size {diff_batch_size}...\n")
+    logger.info(f"Diffusion batch size {diff_batch_size}...\n")
     all_pred_path = []
     for infer_id in range(infer_times):
         
         logger.info(f'Start {infer_id}-th inference...\n')
-        prediction = eval(args, model, feature_dict)
+        prediction = eval(cfg, model, feature_dict)
         
         # save result
         prediction = split_prediction(prediction, diff_batch_size)
@@ -530,7 +556,7 @@ def main(args):
                         feature_dict=feature_dict,
                         prediction=prediction[rank_id],
                         output_dir=output_dir, 
-                        maxit_bin=args.maxit_binary)
+                        maxit_bin=cfg.other.maxit_binary)
             all_pred_path.append(output_dir)
     
     # final ranking
@@ -538,100 +564,5 @@ def main(args):
     ranking_all_predictions(all_pred_path)
     print(f'============ Inference finished ! ============')
 
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--bf16_infer", action='store_true', default=False)
-    parser.add_argument("--seed", type=int, default=None, help="set seed for reproduce experiment results, None is do not set seed")
-    parser.add_argument("--logging_level", type=str, default="DEBUG", help="NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL")
-    parser.add_argument("--model_name", type=str, help='used to choose model config')
-    parser.add_argument("--init_model", type=str, default='')
-    parser.add_argument("--precision", type=str, choices=['fp32', 'bf16'], default='fp32')
-    parser.add_argument("--amp_level", type=str, default='O1')
-    parser.add_argument("--infer_times", type=int, default=1)
-    parser.add_argument("--diff_batch_size", type=int, default=-1)
-    parser.add_argument('--input_json', type=str,
-                        default=None, required=True,
-                        help='Paths to json file, each containing '
-                        'entity information including sequence, smiles or CCD, copies etc.')
-    parser.add_argument('--output_dir', type=str,
-                        default=None, required=True,
-                        help='Path to a directory that will store results.')
-    parser.add_argument('--ccd_preprocessed_path', type=str,
-                        default=None, required=True,
-                        help='Path to CCD preprocessed files.')
-    parser.add_argument('--jackhmmer_binary_path', type=str,
-                        default='/usr/bin/jackhmmer',
-                        help='Path to the JackHMMER executable.')
-    parser.add_argument('--hhblits_binary_path', type=str,
-                        default='/usr/bin/hhblits',
-                        help='Path to the HHblits executable.')
-    parser.add_argument('--hhsearch_binary_path', type=str,
-                        default='/usr/bin/hhsearch',
-                        help='Path to the HHsearch executable.')
-    parser.add_argument('--kalign_binary_path', type=str,
-                        default='/usr/bin/kalign',
-                        help='Path to the Kalign executable.')
-    parser.add_argument('--hmmsearch_binary_path', type=str,
-                        default='/usr/bin/hmmsearch',
-                        help='Path to the hmmsearch executable.')
-    parser.add_argument('--hmmbuild_binary_path', type=str,
-                        default='/usr/bin/hmmbuild',
-                        help='Path to the hmmbuild executable.')
-
-    # binary path of the tool for RNA MSA searching
-    parser.add_argument('--nhmmer_binary_path', type=str,
-                        default='/usr/bin/nhmmer',
-                        help='Path to the nhmmer executable.')
-    
-    parser.add_argument('--uniprot_database_path', type=str,
-                        default=None, required=True,
-                        help='Path to the Uniprot database for use '
-                        'by JackHMMER.')
-    parser.add_argument('--pdb_seqres_database_path', type=str,
-                        default=None, required=True,
-                        help='Path to the PDB '
-                        'seqres database for use by hmmsearch.')
-    parser.add_argument('--uniref90_database_path', type=str,
-                        default=None, required=True,
-                        help='Path to the Uniref90 database for use '
-                        'by JackHMMER.')
-    parser.add_argument('--mgnify_database_path', type=str,
-                        default=None, required=True,
-                        help='Path to the MGnify database for use by '
-                        'JackHMMER.')
-    parser.add_argument('--bfd_database_path', type=str, default=None,
-                        help='Path to the BFD database for use by HHblits.')
-    parser.add_argument('--small_bfd_database_path', type=str, default=None,
-                        help='Path to the small version of BFD used '
-                        'with the "reduced_dbs" preset.')
-    parser.add_argument('--uniclust30_database_path', type=str, default=None,
-                        help='Path to the Uniclust30 database for use '
-                        'by HHblits.')
-    # RNA MSA searching databases
-    parser.add_argument('--rfam_database_path', type=str,
-                        default=None, required=True,
-                        help='Path to the Rfam database for RNA MSA searching.')
-    parser.add_argument('--template_mmcif_dir', type=str,
-                        default=None, required=True,
-                        help='Path to a directory with template mmCIF '
-                        'structures, each named <pdb_id>.cif')
-    parser.add_argument('--max_template_date', type=str,
-                        default=None, required=True,
-                        help='Maximum template release date to consider. '
-                        'Important if folding historical test sets.')
-    parser.add_argument('--obsolete_pdbs_path', type=str,
-                        default=None, required=True,
-                        help='Path to file containing a mapping from '
-                        'obsolete PDB IDs to the PDB IDs of their '
-                        'replacements.')
-    parser.add_argument('--preset',
-                        default='full_dbs', required=False,
-                        choices=['reduced_dbs', 'full_dbs'],
-                        help='Choose preset model configuration - '
-                        'no ensembling and smaller genetic database '
-                        'config (reduced_dbs), no ensembling and full '
-                        'genetic database config  (full_dbs)')
-    parser.add_argument('--maxit_binary', type=str, default=None)
-    args = parser.parse_args()
-    main(args)
+    main()
