@@ -5,17 +5,17 @@
         'seqs': ccd_seqs,
         'msa_seqs': msa_seqs,
         'count': count,
-        'extra_mol_infos': {}， for which seqs has the modify residue type or smiles.
+        'extra_mol_infos': {}, for which seqs has the modify residue type or smiles.
 """
 import collections
 import copy
+import gzip
 import os
 import json
 import sys
 import subprocess
 import tempfile
 import itertools
-sys.path.append('../')
 import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -52,9 +52,7 @@ ERROR_CODES = {
     3: 'Unknown error.'
 }
 
-OBABEL_BIN = os.getenv('OBABEL_BIN')
-if not os.path.exists(OBABEL_BIN):
-    raise FileNotFoundError(f'Cannot find obabel binary at {OBABEL_BIN}.')
+
 
 
 def read_json(path):
@@ -144,6 +142,11 @@ def smiles_toMol_obabel(smiles):
     """
         generate mol from smiles using obabel;
     """    
+    
+    OBABEL_BIN = os.getenv('OBABEL_BIN')
+    if not (OBABEL_BIN and os.path.isfile(OBABEL_BIN)):
+        raise FileNotFoundError(f'Cannot find obabel binary at {OBABEL_BIN}.')
+    
     with tempfile.NamedTemporaryFile(suffix=".mol2") as temp_file:
         print(f"[OBABEL] Temporary file created: {temp_file.name}")
         obabel_cmd = f"{OBABEL_BIN} -:'{smiles}' -omol2 -O{temp_file.name} --gen3d"

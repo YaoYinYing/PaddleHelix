@@ -164,10 +164,13 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
     - maxit_binary: path to maxit_binary, use to convert pdb to cif
     - mmcif_path: path to save *.cif
   """
-  assert maxit_binary is not None and os.path.exists(maxit_binary), (
+  if os.path.isfile(maxit_binary):
+    raise FileNotFoundError(
       f'maxit_binary: {maxit_binary} not exists. '
       f'link: https://sw-tools.rcsb.org/apps/MAXIT/source.html')
-  assert mmcif_path.endswith('.cif'), f'mmcif_path should endswith .cif; got {mmcif_path}'
+  
+  if not mmcif_path.endswith('.cif'):
+     raise ValueError(f'mmcif_path should endswith .cif; got {mmcif_path}')
 
   pdb_path = mmcif_path.replace('.cif', '.pdb')
   pdb_path = prediction_to_pdb(pred_atom_pos, FeatsDict, pdb_path)
