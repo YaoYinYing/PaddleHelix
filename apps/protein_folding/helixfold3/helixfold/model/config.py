@@ -15,7 +15,9 @@
 """Model config."""
 
 import copy
+from typing import Any, Union
 import ml_collections
+from omegaconf import DictConfig
 
 
 NUM_RES = 'num residues placeholder'
@@ -24,16 +26,35 @@ NUM_EXTRA_SEQ = 'extra msa placeholder'
 NUM_TEMPLATES = 'num templates placeholder'
 
 
-def model_config(name: str) -> ml_collections.ConfigDict:
+def model_config(config_diffs: Union[str, DictConfig, dict[str, dict[str, Any]]]) -> ml_collections.ConfigDict:
   """Get the ConfigDict of a model."""
 
   cfg = copy.deepcopy(CONFIG_ALLATOM)
-  if name in CONFIG_DIFFS:
-    cfg.update_from_flattened_dict(CONFIG_DIFFS[name])
+  if config_diffs is None or config_diffs=='':
+    # early return if nothing is changed
+    return cfg
 
-  return cfg
+  if isinstance(config_diffs, DictConfig):
+    if 'preset' in config_diffs and (preset_name:=config_diffs['preset']) in CONFIG_DIFFS:
+      updated_config=CONFIG_DIFFS[preset_name]
+      cfg.update_from_flattened_dict(updated_config)
+      print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
 
+      return cfg
+    if 'model' in config_diffs and (updated_config := config_diffs['model']) is not None:
+      cfg.update(dict(updated_config))
+      print(f'Updated config from `CONFIG_DIFFS`: {updated_config}')
 
+      return cfg
+  
+  raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
+    
+  
+  
+
+  
+
+# preset for runs
 CONFIG_DIFFS = {
     'allatom_demo': {
         'model.heads.confidence_head.weight': 0.01
