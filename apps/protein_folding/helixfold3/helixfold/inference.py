@@ -468,7 +468,7 @@ def main(cfg: DictConfig):
     ## check maxit binary path
     maxit_binary=resolve_bin_path(cfg.other.maxit_binary,'maxit')
     
-    RCSBROOT=os.path.dirname(maxit_binary)
+    RCSBROOT=os.path.join(os.path.dirname(maxit_binary), '..')
     os.environ['RCSBROOT']=RCSBROOT
 
     ## check obabel
