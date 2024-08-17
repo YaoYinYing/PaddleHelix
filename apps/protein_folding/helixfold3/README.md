@@ -36,7 +36,7 @@ Those settings are recommended as they are the same as we used in our A100 machi
 ### Installation
 
 HelixFold3 depends on [PaddlePaddle](https://github.com/paddlepaddle/paddle). Python dependencies available through `pip` 
-is provided in `requirements.txt`. `kalign`, the [`HH-suite`](https://github.com/soedinglab/hh-suite) and `jackhmmer` are 
+is provided with `pyproject.toml`. `kalign`, the [`HH-suite`](https://github.com/soedinglab/hh-suite) and `jackhmmer` are 
 also needed to produce multiple sequence alignments. The download scripts require `aria2c`. 
 
 Locate to the directory of `helixfold` then run:
@@ -50,7 +50,7 @@ conda activate helixfold
 
 # adjust these version numbers as your situation
 conda install -y cudnn=8.4.1 cudatoolkit=11.7 nccl=2.14.3 -c conda-forge -c nvidia
-conda install -y -c bioconda hmmer==3.3.2 kalign2==2.04 hhsuite==3.3.0 
+conda install -y -c bioconda aria2 hmmer==3.3.2 kalign2==2.04 hhsuite==3.3.0 
 conda install -y -c conda-forge openbabel
 
 # install paddlepaddle
@@ -60,7 +60,7 @@ pip install paddlepaddle-gpu==2.6.1.post120 -f https://www.paddlepaddle.org.cn/w
 # downgrade pip
 pip install --upgrade 'pip<24'
 
-# edit configuration file at `/helixfold/config/helixfold.yaml` to set your databases and binaries correctly
+# edit configuration file at `./helixfold/config/helixfold.yaml` to set your databases and binaries correctly.
 
 # install HF3 as a python library
 pip install .  --no-cache-dir
@@ -138,26 +138,29 @@ The script is as follows,
 ```shell
 LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
 helixfold \
-    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_8ecx.json \
-    output=. CONFIG_DIFFS.preset=allatom_demo
+    input=./data/demo_8ecx.json \
+    output=. \
+    CONFIG_DIFFS.preset=allatom_demo
 ```
 
 ##### Run with customized configuration dir and file(`./myfold.yaml`, for example):
 ```shell
 LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
 helixfold --config-dir=. --config-name=myfold \
-    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_6zcy_smiles.json \
-    output=. CONFIG_DIFFS.preset=allatom_demo
+    input=./data/demo_6zcy_smiles.json \
+    output=. \
+    CONFIG_DIFFS.preset=allatom_demo
 ```
 
 ##### Run with additional configuration term 
 ```shell
-LD_LIBRARY_PATH=/mnt/data/envs/conda_env/envs/helixfold/lib/:$LD_LIBRARY_PATH \
+LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
 helixfold \
-    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_6zcy.json \
+    input=./data/demo_6zcy.json \
     output=. \
     CONFIG_DIFFS.model.heads.confidence_head.weight=0.01 \
-    CONFIG_DIFFS.model.global_config.subbatch_size=192
+    CONFIG_DIFFS.model.global_config.subbatch_size=192 \
+    CONFIG_DIFFS.model.num_recycle=10
 ```
 
 The descriptions of the above script are as follows:
@@ -166,7 +169,7 @@ The descriptions of the above script are as follows:
 * `config-name` - The name of the configuration file you would like to use.
 * `input` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
 * `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
-* `CONFIG_DIFFS.preset` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
+* `CONFIG_DIFFS.preset` - Adjusted model config preset name in `./helixfold/model/config.py:CONFIG_DIFFS`. The preset will be updated into final model configuration with `CONFIG_ALLATOM`.
 * `CONFIG_DIFFS.*` - Override model any configuration in `CONFIG_ALLATOM`.
 
 ### Understanding Model Output
