@@ -464,7 +464,6 @@ def main(cfg: DictConfig):
     print(f'>>> FLAGS_new_einsum: {new_einsum}')
     print(f'>>> config:\n{cfg}')
 
-    all_entitys = preprocess_json_entity(cfg.input, cfg.output)
     ## check maxit binary path
     maxit_binary=resolve_bin_path(cfg.other.maxit_binary,'maxit')
     
@@ -475,6 +474,8 @@ def main(cfg: DictConfig):
     obabel_bin=resolve_bin_path(cfg.bin.obabel,'obabel')
     os.environ['OBABEL_BIN']=obabel_bin
 
+    all_entitys = preprocess_json_entity(cfg.input, cfg.output)
+    
     ### Set seed for reproducibility
     seed = cfg.seed
     if seed is None:
