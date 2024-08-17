@@ -36,14 +36,15 @@ from helixfold.data import pipeline_multimer_parallel as pipeline_multimer
 from helixfold.data import pipeline_rna_parallel as pipeline_rna
 from helixfold.data import pipeline_rna_multimer
 from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
+from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
 from helixfold.utils.utils import get_custom_amp_list
-from helixfold.utils.model import RunModel
 from helixfold.utils.misc import set_logging_level
 from typing import Dict
 from helixfold.infer_scripts import feature_processing_aa, preprocess
 from helixfold.infer_scripts.tools import mmcif_writer
+
 
 script_path=os.path.dirname(__file__)
 
@@ -487,11 +488,11 @@ def main(cfg: DictConfig):
         assert cfg.db.uniclust30 is not None
 
     logger.info('Getting MSA/Template Pipelines...')
-    msa_templ_data_pipeline_dict = get_msa_templates_pipeline(args)
+    msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=cfg)
         
     ### Create model
-    model_config = config.model_config(cfg.job_id)
-    #print(f'>>> model_config:\n{model_config}')
+    model_config = config.model_config(cfg.CONFIG_DIFFS)
+    logging.warning(f'>>> Model config: \n{model_config}\n\n')
 
     model = RunModel(model_config)
 
@@ -515,8 +516,9 @@ def main(cfg: DictConfig):
     msa_output_dir.mkdir(parents=True, exist_ok=True)
 
     features_pkl = output_dir_base.joinpath('final_features.pkl')
-    if features_pkl.exists():
+    if features_pkl.exists() and not cfg.override:
         with open(features_pkl, 'rb') as f:
+            logging.info(f'Load features from precomputed {features_pkl}')
             feature_dict = pickle.load(f)
     else:
         feature_dict = feature_processing_aa.process_input_json(
