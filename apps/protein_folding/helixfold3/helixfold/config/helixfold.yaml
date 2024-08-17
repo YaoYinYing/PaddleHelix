@@ -29,7 +29,7 @@ bin:
   hmmsearch: null  # Corresponds to --hmmsearch_binary_path
   hmmbuild: null  # Corresponds to --hmmbuild_binary_path
   nhmmer: null  # Corresponds to --nhmmer_binary_path
-  obabel: null
+  obabel: null  # Inject to env as OBABEL_BIN
 
 # Database paths
 db:
@@ -38,7 +38,7 @@ db:
   uniref90: /mnt/db/uniref90/uniref90.fasta  # Corresponds to --uniref90_database_path, required field
   mgnify: /mnt/db/mgnify/mgy_clusters.fa  # Corresponds to --mgnify_database_path, required field
   bfd: /mnt/db/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt  # Corresponds to --bfd_database_path
-  small_bfd: null  # Corresponds to --small_bfd_database_path
+  small_bfd: /mnt/db/reduced_bfd/bfd-first_non_consensus_sequences.fasta  # Corresponds to --small_bfd_database_path
   uniclust30: /mnt/db/uniref30_uc30/UniRef30_2022_02/UniRef30_2022_02  # Corresponds to --uniclust30_database_path
   rfam: /mnt/db/helixfold/rna/Rfam-14.9_rep_seq.fasta  # Corresponds to --rfam_database_path, required field
   ccd_preprocessed: /mnt/db/ccd/ccd_preprocessed_etkdg.pkl.gz  # Corresponds to --ccd_preprocessed_path, required field
@@ -51,7 +51,7 @@ template:
 
 # Preset configuration
 preset:
-  preset: full_dbs  # Corresponds to --preset, choices=['reduced_dbs', 'full_dbs']
+  preset: reduced_dbs  # Corresponds to --preset, choices=['reduced_dbs', 'full_dbs']
 
 # Other configurations
 other:
