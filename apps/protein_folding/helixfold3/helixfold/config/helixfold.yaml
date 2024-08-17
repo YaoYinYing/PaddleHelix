@@ -18,6 +18,7 @@ use_small_bfd: false # Corresponds to --use_small_bfd
 
 input: null  # Corresponds to --input_json, required field
 output: null  # Corresponds to --output_dir, required field
+override: false # Set true to override existing msa output directory
 
 
 # Binary tool paths, leave them as null to find proper ones under PATH or conda bin path
@@ -56,4 +57,3 @@ preset:
 # Other configurations
 other:
   maxit_binary: /mnt/data/yinying/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
-  no_msa_templ_feats: false  # Corresponds to --no_msa_templ_feats

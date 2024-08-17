@@ -487,7 +487,7 @@ def main(cfg: DictConfig):
         assert cfg.db.uniclust30 is not None
 
     logger.info('Getting MSA/Template Pipelines...')
-    msa_templ_data_pipeline_dict = get_msa_templates_pipeline(args)
+    msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=cfg)
         
     ### Create model
     model_config = config.model_config(cfg.job_id)
@@ -515,8 +515,9 @@ def main(cfg: DictConfig):
     msa_output_dir.mkdir(parents=True, exist_ok=True)
 
     features_pkl = output_dir_base.joinpath('final_features.pkl')
-    if features_pkl.exists():
+    if features_pkl.exists() and not cfg.override:
         with open(features_pkl, 'rb') as f:
+            logging.info(f'Load features from precomputed {features_pkl}')
             feature_dict = pickle.load(f)
     else:
         feature_dict = feature_processing_aa.process_input_json(
