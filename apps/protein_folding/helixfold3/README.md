@@ -128,12 +128,7 @@ A example of input data is as follows:
 
 #### Running HelixFold for Inference
 To run inference on a sequence or multiple sequences using HelixFold3's pretrained parameters, run e.g.:
-* Inference on single GPU (change the settings in script BEFORE you run it)
-```
-sh run_infer.sh
-```
 
-The script is as follows,
 ##### Run from default config
 ```shell
 LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
