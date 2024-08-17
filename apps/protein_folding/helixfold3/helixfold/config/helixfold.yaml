@@ -66,6 +66,8 @@ other:
 # CONFIG_DIFFS for advanced configuration
 CONFIG_DIFFS:
   preset: null #choices=['null','allatom_demo', 'allatom_subbatch_64_recycle_1']
+
+  # Detailed configuration adjustments against `CONFIG_ALLATOM` can be used here. for example: 
   # model:
     # global_config:
     #   subbatch_size: 96 # model.global_config.subbatch_size
