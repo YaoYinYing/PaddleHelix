@@ -194,29 +194,27 @@ def ranking_all_predictions(output_dirs):
         rank_id += 1
 
 @paddle.no_grad()
-def eval(cfg: DictConfig, model:RunModel, batch):
-    """Evaluate a given dataset"""
+def eval(args, model, batch):
+    """evaluate a given dataset"""
     model.eval()       
         
-    # Inference
+    # inference
     def _forward_with_precision(batch):
-        precision=cfg.precision
-        if precision not in ('bf16','fp32',):
-            raise ValueError("Please choose precision from bf16 and fp32!")
-
-        if cfg.precision == "bf16" or cfg.bf16_infer:
+        if args.precision == "bf16" or args.bf16_infer:
             black_list, white_list = get_custom_amp_list()
             with paddle.amp.auto_cast(enable=True,
-                                      custom_white_list=white_list, 
-                                      custom_black_list=black_list, 
-                                      level=cfg.amp_level, 
-                                      dtype='bfloat16'):
+                                        custom_white_list=white_list, 
+                                        custom_black_list=black_list, 
+                                        level=args.amp_level, 
+                                        dtype='bfloat16'):
                 return model(batch, compute_loss=False)
-
-        return model(batch, compute_loss=False)
+        elif args.precision == "fp32":
+            return model(batch, compute_loss=False)
+        else:
+            raise ValueError("Please choose precision from bf16 and fp32! ")
         
     res = _forward_with_precision(batch)
-    logger.info("Inference Succeeds...\n")
+    logger.info(f"Inference Succeeds...\n")
     return res
 
 

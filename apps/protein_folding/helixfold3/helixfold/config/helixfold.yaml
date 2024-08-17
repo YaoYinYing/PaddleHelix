@@ -6,7 +6,6 @@ defaults:
 bf16_infer: false  # Corresponds to --bf16_infer
 seed: null  # Corresponds to --seed
 logging_level: DEBUG  # Corresponds to --logging_level
-job_id: 'structure_prediction'  # Corresponds to --model_name
 weight_path: /mnt/db/weights/helixfold/HelixFold3-params-240814/HelixFold3-240814.pdparams  # Corresponds to --init_model
 precision: fp32  # Corresponds to --precision
 amp_level: O1  # Corresponds to --amp_level

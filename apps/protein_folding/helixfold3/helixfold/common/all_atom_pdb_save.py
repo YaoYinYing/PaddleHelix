@@ -21,6 +21,7 @@ import numpy as np
 import paddle
 import itertools
 import os
+import subprocess
 
 FeatureDict = Mapping[str, np.ndarray]
 ModelOutput = Mapping[str, Any]  # Is a nested dict.
@@ -164,7 +165,7 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
     - maxit_binary: path to maxit_binary, use to convert pdb to cif
     - mmcif_path: path to save *.cif
   """
-  if os.path.isfile(maxit_binary):
+  if not os.path.isfile(maxit_binary):
     raise FileNotFoundError(
       f'maxit_binary: {maxit_binary} not exists. '
       f'link: https://sw-tools.rcsb.org/apps/MAXIT/source.html')
@@ -174,7 +175,27 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
 
   pdb_path = mmcif_path.replace('.cif', '.pdb')
   pdb_path = prediction_to_pdb(pred_atom_pos, FeatsDict, pdb_path)
-  msg = os.system(f'{maxit_binary} -i {pdb_path} -o 1 -output {mmcif_path}')
-  if msg != 0:
-    print(f'convert pdb to cif failed, error message: {msg}')
+
+  cmd=[maxit_binary,
+       '-i', pdb_path,
+       '-o', '1',
+       '-output', mmcif_path,
+       ]
+  
+  print('Launching subprocess "%s"', ' '.join(cmd))
+
+  process = subprocess.Popen(
+      cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ.copy())
+
+
+  stdout, stderr = process.communicate()
+  retcode = process.wait()
+
+
+  if retcode:
+    # Logs have a 15k character limit, so log HHblits error line by line.
+    print('maxit failed. HHblits stderr begin:')
+    raise RuntimeError('HHblits failed\nstdout:\n%s\n\nstderr:\n%s\n' % (
+        stdout.decode('utf-8'), stderr[:500_000].decode('utf-8')))
+
   return mmcif_path
