@@ -44,17 +44,26 @@ Locate to the directory of `helixfold` then run:
 ```bash
 # Install py env
 conda create -n helixfold -c conda-forge python=3.9
-conda install -y -c bioconda aria2 hmmer==3.3.2 kalign2==2.04 hhsuite==3.3.0 -n helixfold
-conda install -y -c conda-forge openbabel -n helixfold
 
 # activate the conda environment
 conda activate helixfold
 
+# adjust these version numbers as your situation
+conda install -y cudnn=8.4.1 cudatoolkit=11.7 nccl=2.14.3 -c conda-forge -c nvidia
+conda install -y -c bioconda hmmer==3.3.2 kalign2==2.04 hhsuite==3.3.0 
+conda install -y -c conda-forge openbabel
+
 # install paddlepaddle
-python3 -m pip install paddlepaddle-gpu==2.6.1.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+pip install paddlepaddle-gpu==2.6.1.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 # or lower version: https://paddle-wheel.bj.bcebos.com/2.5.1/linux/linux-gpu-cuda11.7-cudnn8.4.1-mkl-gcc8.2-avx/paddlepaddle_gpu-2.5.1.post117-cp39-cp39-linux_x86_64.whl
 
-python3 -m pip install -r requirements.txt
+# downgrade pip
+pip install --upgrade 'pip<24'
+
+# edit configuration file at `/helixfold/config/helixfold.yaml` to set your databases and binaries correctly
+
+# install HF3 as a python library
+pip install .  --no-cache-dir
 ```
 
 Note: If you have a different version of python3 and cuda, please refer to [here](https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html) for the compatible PaddlePaddle `dev` package.
@@ -125,58 +134,40 @@ sh run_infer.sh
 ```
 
 The script is as follows,
-```bash
-#!/bin/bash
-
-PYTHON_BIN="PATH/TO/YOUR/PYTHON"
-ENV_BIN="PATH/TO/YOUR/ENV"
-MAXIT_SRC="PATH/TO/MAXIT/SRC"
-DATA_DIR="PATH/TO/DATA"
-export OBABEL_BIN="PATH/TO/OBABEL/BIN"
-export PATH="$MAXIT_BIN/bin:$PATH"
-
-CUDA_VISIBLE_DEVICES=0 "$PYTHON_BIN" inference.py \
-    --maxit_binary "$MAXIT_SRC/bin/maxit" \
-    --jackhmmer_binary_path "$ENV_BIN/jackhmmer" \
-	--hhblits_binary_path "$ENV_BIN/hhblits" \
-	--hhsearch_binary_path "$ENV_BIN/hhsearch" \
-	--kalign_binary_path "$ENV_BIN/kalign" \
-	--hmmsearch_binary_path "$ENV_BIN/hmmsearch" \
-	--hmmbuild_binary_path "$ENV_BIN/hmmbuild" \
-    --nhmmer_binary_path "$ENV_BIN/nhmmer" \
-    --preset='reduced_dbs' \
-    --bfd_database_path "$DATA_DIR/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt" \
-    --small_bfd_database_path "$DATA_DIR/small_bfd/bfd-first_non_consensus_sequences.fasta" \
-    --bfd_database_path "$DATA_DIR/small_bfd/bfd-first_non_consensus_sequences.fasta" \
-    --uniclust30_database_path "$DATA_DIR/uniclust30/uniclust30_2018_08/uniclust30_2018_08" \
-    --uniprot_database_path "$DATA_DIR/uniprot/uniprot.fasta" \
-    --pdb_seqres_database_path "$DATA_DIR/pdb_seqres/pdb_seqres.txt" \
-    --uniref90_database_path "$DATA_DIR/uniref90/uniref90.fasta" \
-    --mgnify_database_path "$DATA_DIR/mgnify/mgy_clusters_2018_12.fa" \
-    --template_mmcif_dir "$DATA_DIR/pdb_mmcif/mmcif_files" \
-    --obsolete_pdbs_path "$DATA_DIR/pdb_mmcif/obsolete.dat" \
-    --ccd_preprocessed_path "$DATA_DIR/ccd_preprocessed_etkdg.pkl.gz" \
-    --rfam_database_path "$DATA_DIR/Rfam-14.9_rep_seq.fasta" \
-    --max_template_date=2020-05-14 \
-    --input_json data/demo_protein_ligand.json \
-    --output_dir ./output \
-    --model_name allatom_demo \
-    --init_model ./init_models/checkpoints.pdparams \
-    --infer_times 3 \
-    --precision "fp32"
+##### Run from default config
+```shell
+LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
+helixfold \
+    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_8ecx.json \
+    output=. CONFIG_DIFFS.preset=allatom_demo
 ```
+
+##### Run with customized configuration dir and file(`./myfold.yaml`, for example):
+```shell
+LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH \
+helixfold --config-dir=. --config-name=myfold \
+    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_6zcy_smiles.json \
+    output=. CONFIG_DIFFS.preset=allatom_demo
+```
+
+##### Run with additional configuration term 
+```shell
+LD_LIBRARY_PATH=/mnt/data/envs/conda_env/envs/helixfold/lib/:$LD_LIBRARY_PATH \
+helixfold \
+    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_6zcy.json \
+    output=. \
+    CONFIG_DIFFS.model.heads.confidence_head.weight=0.01 \
+    CONFIG_DIFFS.model.global_config.subbatch_size=192
+```
+
 The descriptions of the above script are as follows:
-* Replace `MAXIT_SRC` with your installed `maxit`'s root path.
-* Replace `DATA_DIR` with your downloaded data path.
-* Replace `OBABEL_BIN` with your installed `openbabel` path.
-* Replace `ENV_BIN` with your conda virtual environment or any environment where `hhblits`, `hmmsearch` and other dependencies have been installed.
-* `--preset` - Set `'reduced_dbs'` to use small bfd or `'full_dbs'` to use full bfd.
-* `--*_database_path` - Path to datasets you have downloaded.
-* `--input_json` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
-* `--output_dir` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
-* `--model_name` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
-* `--infer_time` - The number of inferences executed by model for single input. In each inference, the model will infer `5` times (`diff_batch_size`) for the same input by default. This hyperparameter can be changed by `model.head.diffusion_module.test_diff_batch_size` within `./helixfold/model/config.py`
-* `--precision` - Either `bf16` or `fp32`. Please check if your machine can support `bf16` or not beforing changing it. For example, `bf16` is supported by A100 and H100 or higher version while V100 only supports `fp32`.
+* `LD_LIBRARY_PATH` - This is required to load the `libcudnn.so` library if you encounter issue like `RuntimeError: (PreconditionNotMet) Cannot load cudnn shared library. Cannot invoke method cudnnGetVersion.`
+* `config-dir` - The directory that contains the alterative configuration file you would like to use.
+* `config-name` - The name of the configuration file you would like to use.
+* `input` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
+* `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
+* `CONFIG_DIFFS.preset` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
+* `CONFIG_DIFFS.*` - Override model any configuration in `CONFIG_ALLATOM`.
 
 ### Understanding Model Output
 

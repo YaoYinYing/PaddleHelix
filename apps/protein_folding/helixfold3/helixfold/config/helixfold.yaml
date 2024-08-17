@@ -13,11 +13,13 @@ amp_level: O1  # Corresponds to --amp_level
 infer_times: 1  # Corresponds to --infer_times
 diff_batch_size: -1  # Corresponds to --diff_batch_size
 use_small_bfd: false # Corresponds to --use_small_bfd
+msa_only: false # Only process msa
 
 # File paths
 
 input: null  # Corresponds to --input_json, required field
 output: null  # Corresponds to --output_dir, required field
+override: false # Set true to override existing msa output directory
 
 
 # Binary tool paths, leave them as null to find proper ones under PATH or conda bin path
@@ -55,5 +57,16 @@ preset:
 
 # Other configurations
 other:
-  maxit_binary: /mnt/data/yinying/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
-  no_msa_templ_feats: false  # Corresponds to --no_msa_templ_feats
+  maxit_binary: /mnt/data/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
+
+
+# CONFIG_DIFFS for advanced configuration
+CONFIG_DIFFS:
+  preset: null #choices=['null','allatom_demo', 'allatom_subbatch_64_recycle_1']
+  # model:
+    # global_config:
+    #   subbatch_size: 96 # model.global_config.subbatch_size
+    # num_recycle: 3 # model.num_recycle
+    # heads:
+    #   confidence_head:
+    #     weight: 0.0 # model.heads.confidence_head.weight
