@@ -12,6 +12,7 @@ amp_level: O1  # Corresponds to --amp_level
 infer_times: 1  # Corresponds to --infer_times
 diff_batch_size: -1  # Corresponds to --diff_batch_size
 use_small_bfd: false # Corresponds to --use_small_bfd
+msa_only: false # Only process msa
 
 # File paths
 

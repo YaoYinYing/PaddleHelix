@@ -39,11 +39,12 @@ from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
 from helixfold.utils.utils import get_custom_amp_list
-from helixfold.utils.model import RunModel
 from helixfold.utils.misc import set_logging_level
 from typing import Dict
 from helixfold.infer_scripts import feature_processing_aa, preprocess
 from helixfold.infer_scripts.tools import mmcif_writer
+
+from apps.protein_folding.helixfold.alphafold_paddle.model.model import RunModel
 
 script_path=os.path.dirname(__file__)
 
