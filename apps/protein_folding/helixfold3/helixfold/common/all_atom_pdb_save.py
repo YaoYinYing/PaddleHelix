@@ -185,7 +185,7 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
   print('Launching subprocess "%s"', ' '.join(cmd))
 
   process = subprocess.Popen(
-      ' '.join(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ.copy())
+      cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ.copy())
 
 
   stdout, stderr = process.communicate()
