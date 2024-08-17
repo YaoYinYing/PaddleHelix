@@ -41,18 +41,17 @@ def model_config(config_diffs: Union[str, DictConfig, dict[str, dict[str, Any]]]
       print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
 
       return cfg
-    if 'model' in config_diffs and (updated_config := config_diffs['model']) is not None:
-      cfg.update(dict(updated_config))
-      print(f'Updated config from `CONFIG_DIFFS`: {updated_config}')
-
+    
+    # update from detailed configuration
+    if any(root_kw in config_diffs for root_kw in CONFIG_ALLATOM):
+      for root_kw in CONFIG_ALLATOM:
+        if root_kw in config_diffs and (updated_config := config_diffs[root_kw]) is not None:
+          cfg.update(dict(updated_config))
+          print(f'Updated config from `CONFIG_DIFFS`: {updated_config}')
       return cfg
   
   raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
     
-  
-  
-
-  
 
 # preset for runs
 CONFIG_DIFFS = {

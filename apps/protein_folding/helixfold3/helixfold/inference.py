@@ -490,8 +490,7 @@ def main(cfg: DictConfig):
     msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=cfg)
         
     ### Create model
-    model_config = config.model_config(cfg.job_id)
-    #print(f'>>> model_config:\n{model_config}')
+    model_config = config.model_config(cfg.CONFIG_DIFFS)
 
     model = RunModel(model_config)
 

@@ -65,7 +65,7 @@ CONFIG_DIFFS:
   model:
     global_config:
       subbatch_size: 96 # model.global_config.subbatch_size
-  num_recycle: 3 # model.num_recycle
-  heads:
-    confidence_head:
-      weight: 0.0 # model.heads.confidence_head.weight
+    num_recycle: 3 # model.num_recycle
+    heads:
+      confidence_head:
+        weight: 0.0 # model.heads.confidence_head.weight
