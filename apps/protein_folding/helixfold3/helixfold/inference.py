@@ -491,6 +491,7 @@ def main(cfg: DictConfig):
         
     ### Create model
     model_config = config.model_config(cfg.CONFIG_DIFFS)
+    logging.warning(f'>>> Model config: \n{model_config}\n\n')
 
     model = RunModel(model_config)
 

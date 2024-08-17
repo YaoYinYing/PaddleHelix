@@ -150,7 +150,15 @@ helixfold --config-dir=. --config-name=myfold \
     output=. CONFIG_DIFFS.preset=allatom_demo
 ```
 
-
+##### Run with additional configuration term 
+```shell
+LD_LIBRARY_PATH=/mnt/data/envs/conda_env/envs/helixfold/lib/:$LD_LIBRARY_PATH \
+helixfold \
+    input=/repo/PaddleHelix/apps/protein_folding/helixfold3/data/demo_6zcy.json \
+    output=. \
+    CONFIG_DIFFS.model.heads.confidence_head.weight=0.01 \
+    CONFIG_DIFFS.model.global_config.subbatch_size=192
+```
 
 The descriptions of the above script are as follows:
 * `LD_LIBRARY_PATH` - This is required to load the `libcudnn.so` library if you encounter issue like `RuntimeError: (PreconditionNotMet) Cannot load cudnn shared library. Cannot invoke method cudnnGetVersion.`
@@ -158,8 +166,8 @@ The descriptions of the above script are as follows:
 * `config-name` - The name of the configuration file you would like to use.
 * `input` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
 * `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
-* `--CONFIG_DIFFS.preset` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
-
+* `CONFIG_DIFFS.preset` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
+* `CONFIG_DIFFS.*` - Override model any configuration in `CONFIG_ALLATOM`.
 
 ### Understanding Model Output
 
