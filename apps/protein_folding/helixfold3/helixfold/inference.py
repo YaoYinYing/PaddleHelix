@@ -36,6 +36,7 @@ from helixfold.data import pipeline_multimer_parallel as pipeline_multimer
 from helixfold.data import pipeline_rna_parallel as pipeline_rna
 from helixfold.data import pipeline_rna_multimer
 from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
+from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
 from helixfold.utils.utils import get_custom_amp_list
@@ -44,7 +45,6 @@ from typing import Dict
 from helixfold.infer_scripts import feature_processing_aa, preprocess
 from helixfold.infer_scripts.tools import mmcif_writer
 
-from apps.protein_folding.helixfold.alphafold_paddle.model.model import RunModel
 
 script_path=os.path.dirname(__file__)
 

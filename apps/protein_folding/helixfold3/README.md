@@ -150,6 +150,8 @@ helixfold --config-dir=. --config-name=myfold \
     output=. CONFIG_DIFFS.preset=allatom_demo
 ```
 
+
+
 The descriptions of the above script are as follows:
 * `LD_LIBRARY_PATH` - This is required to load the `libcudnn.so` library if you encounter issue like `RuntimeError: (PreconditionNotMet) Cannot load cudnn shared library. Cannot invoke method cudnnGetVersion.`
 * `config-dir` - The directory that contains the alterative configuration file you would like to use.
@@ -157,6 +159,7 @@ The descriptions of the above script are as follows:
 * `input` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
 * `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
 * `--CONFIG_DIFFS.preset` - Model name in `./helixfold/model/config.py`. Different model names specify different configurations. Mirro modification to configuration can be specified in `CONFIG_DIFFS` in the `config.py` without change to the full configuration in `CONFIG_ALLATOM`.
+
 
 ### Understanding Model Output
 

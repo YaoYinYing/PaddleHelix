@@ -62,10 +62,10 @@ other:
 # CONFIG_DIFFS for advanced configuration
 CONFIG_DIFFS:
   preset: null #choices=['null','allatom_demo', 'allatom_subbatch_64_recycle_1']
-  model:
-    global_config:
-      subbatch_size: 96 # model.global_config.subbatch_size
-    num_recycle: 3 # model.num_recycle
-    heads:
-      confidence_head:
-        weight: 0.0 # model.heads.confidence_head.weight
+  # model:
+    # global_config:
+    #   subbatch_size: 96 # model.global_config.subbatch_size
+    # num_recycle: 3 # model.num_recycle
+    # heads:
+    #   confidence_head:
+    #     weight: 0.0 # model.heads.confidence_head.weight
