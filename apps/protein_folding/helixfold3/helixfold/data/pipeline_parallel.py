@@ -241,6 +241,7 @@ class DataPipeline:
         jackhmmer_uniref90_result,
         jackhmmer_mgnify_result,
         bfd_result,
+        other_result
         
     ] = self.parallel_msa_joblib(func=run_msa_tool,
                           input_args=msa_tasks)
