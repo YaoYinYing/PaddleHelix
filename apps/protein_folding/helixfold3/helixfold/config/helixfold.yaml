@@ -14,6 +14,10 @@ diff_batch_size: -1  # Corresponds to --diff_batch_size
 use_small_bfd: false # Corresponds to --use_small_bfd
 msa_only: false # Only process msa
 
+nproc_msa: 
+  hhblits: 16 # Number of processors used by hhblits
+  jackhmmer: 8 # Number of processors used by jackhmmer
+
 # File paths
 
 input: null  # Corresponds to --input_json, required field
@@ -52,7 +56,7 @@ template:
 
 # Preset configuration
 preset:
-  preset: reduced_dbs  # Corresponds to --preset, choices=['reduced_dbs', 'full_dbs']
+  preset: full_dbs  # Corresponds to --preset, choices=['reduced_dbs', 'full_dbs']
 
 # Other configurations
 other:

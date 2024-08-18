@@ -14,7 +14,8 @@ from helixfold.common import protein
 from helixfold.data import feature_processing
 from helixfold.data import msa_pairing
 from helixfold.data import parsers
-from helixfold.data import pipeline
+#from helixfold.data import pipeline
+from helixfold.data import pipeline_parallel as pipeline
 from helixfold.data.tools import jackhmmer
 import numpy as np
 import multiprocessing
@@ -197,24 +198,38 @@ class DataPipeline:
     with temp_fasta_file(chain_fasta_str) as chain_fasta_path:
       logging.info('Running monomer pipeline on chain %s: %s',
                    chain_id, description)
+
+      # We only construct the pairing features if there are 2 or more unique
+      # sequences.
+      self.jackhmmer_uniprot_args=(
+          self._uniprot_msa_runner,
+          str(chain_fasta_path),
+          os.path.join(chain_msa_output_dir, 'uniprot_hits.sto'),
+          'sto',
+          self.use_precomputed_msas,
+          0
+      )
+      
       chain_features = self._monomer_data_pipeline.process(
           input_fasta_path=chain_fasta_path,
-          msa_output_dir=chain_msa_output_dir)
+          msa_output_dir=chain_msa_output_dir,
+          other_args=self.jackhmmer_uniprot_args if not is_homomer_or_monomer else None)
 
       # We only construct the pairing features if there are 2 or more unique
       # sequences.
       if not is_homomer_or_monomer:
-        all_seq_msa_features = self._all_seq_msa_features(chain_fasta_path,
-                                                          chain_msa_output_dir)
+        all_seq_msa_features = self._all_seq_msa_features(chain_msa_output_dir)
         chain_features.update(all_seq_msa_features)
     return chain_features
 
-  def _all_seq_msa_features(self, input_fasta_path, msa_output_dir):
+  def _all_seq_msa_features(self, msa_output_dir):
     """Get MSA features for unclustered uniprot, for pairing."""
-    out_path = os.path.join(msa_output_dir, 'uniprot_hits.sto')
-    result = pipeline.run_msa_tool(
-        self._uniprot_msa_runner, input_fasta_path, out_path, 'sto',
-        self.use_precomputed_msas)
+    # edited by yinying to adapt to the multiprocess version of run_msa_tool function
+    result = pipeline.read_msa_result(
+        msa_out_path=os.path.join(msa_output_dir, 'uniprot_hits.sto'),
+        msa_format='sto',
+        max_sto_sequences=0
+    )
     msa = parsers.parse_stockholm(result['sto'])
     msa = msa.truncate(max_seqs=self._max_uniprot_hits)
     all_seq_features = pipeline.make_msa_features([msa])
