@@ -26,6 +26,8 @@ import logging
 import numpy as np
 import shutil
 
+from absl import logging
+
 from omegaconf import DictConfig
 import hydra
 
@@ -40,7 +42,6 @@ from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
 from helixfold.utils.utils import get_custom_amp_list
-from helixfold.utils.misc import set_logging_level
 from typing import Dict
 from helixfold.infer_scripts import feature_processing_aa, preprocess
 from helixfold.infer_scripts.tools import mmcif_writer
@@ -68,7 +69,6 @@ DISPLAY_RESULTS_KEYS = [
 
 RETURN_KEYS = ['diffusion_module', 'confidence_head']
 
-logger = logging.getLogger(__file__)
 
 MAX_TEMPLATE_HITS = 4
 
@@ -95,7 +95,7 @@ def preprocess_json_entity(json_path, out_dir):
     if all_entitys is None:
         raise ValueError("The json file does not contain any valid entity.")
     else:
-        logger.info("The json file contains %d valid entity.", len(all_entitys))
+        logging.info("The json file contains %d valid entity.", len(all_entitys))
     
     return all_entitys
 
@@ -187,7 +187,7 @@ def ranking_all_predictions(output_dirs):
     ranked_map = dict(sorted(ranking_score_path_map.items(), key=lambda x: x[1], reverse=True))
     rank_id = 1
     for outpath, rank_score in ranked_map.items():
-        logger.debug("[ranking_all_predictions] Ranking score of %s: %.5f", outpath, rank_score)
+        logging.debug("[ranking_all_predictions] Ranking score of %s: %.5f", outpath, rank_score)
         basename_prefix = os.path.basename(outpath).split('-pred-')[0]
         target_path = os.path.join(os.path.dirname(outpath), f'{basename_prefix}-rank{rank_id}')
         if os.path.exists(target_path) and os.path.isdir(target_path):
@@ -216,7 +216,7 @@ def eval(args, model, batch):
             raise ValueError("Please choose precision from bf16 and fp32! ")
         
     res = _forward_with_precision(batch)
-    logger.info(f"Inference Succeeds...\n")
+    logging.info(f"Inference Succeeds...\n")
     return res
 
 
@@ -452,7 +452,7 @@ def split_prediction(pred, rank):
 
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
 def main(cfg: DictConfig):
-    set_logging_level(cfg.logging_level)
+    logging.set_verbosity(cfg.logging_level)
 
     if cfg.msa_only == True:
         logging.warning(f'Model inference will be skipped because MSA-only mode is required.')
@@ -483,7 +483,7 @@ def main(cfg: DictConfig):
     if seed is None:
         seed = np.random.randint(10000000)
     else:
-        logger.warning('Seed is only used for reproduction')
+        logging.warning('Seed is only used for reproduction')
     init_seed(seed)
 
     use_small_bfd = cfg.preset.preset == 'reduced_dbs'
@@ -494,7 +494,7 @@ def main(cfg: DictConfig):
         assert cfg.db.bfd is not None
         assert cfg.db.uniclust30 is not None
 
-    logger.info('Getting MSA/Template Pipelines...')
+    logging.info('Getting MSA/Template Pipelines...')
     msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=cfg)
         
     ### Create model
@@ -553,12 +553,12 @@ def main(cfg: DictConfig):
     if cfg.diff_batch_size > 0:
         model_config.model.heads.diffusion_module.test_diff_batch_size = cfg.diff_batch_size
     diff_batch_size = model_config.model.heads.diffusion_module.test_diff_batch_size 
-    logger.info(f'Inference {infer_times} Times...')
-    logger.info(f"Diffusion batch size {diff_batch_size}...\n")
+    logging.info(f'Inference {infer_times} Times...')
+    logging.info(f"Diffusion batch size {diff_batch_size}...\n")
     all_pred_path = []
     for infer_id in range(infer_times):
         
-        logger.info(f'Start {infer_id}-th inference...\n')
+        logging.info(f'Start {infer_id}-th inference...\n')
         prediction = eval(cfg, model, feature_dict)
         
         # save result

@@ -22,7 +22,7 @@ import io
 
 from helixfold.model import modules_all_atom
 from helixfold.model import utils
-logger = logging.getLogger(__name__)
+from absl import logging
 
 class RunModel(nn.Layer):
     """
@@ -69,7 +69,7 @@ class RunModel(nn.Layer):
                 utils.pd_params_merge_qkvw(pd_params)
 
         elif params_path.endswith('.pd') or params_path.endswith('.pdparams'):
-            logger.info('Load as Paddle model')
+            logging.info('Load as Paddle model')
             pd_params = paddle.load(params_path)
 
         else:
