@@ -15,8 +15,8 @@ use_small_bfd: false # Corresponds to --use_small_bfd
 msa_only: false # Only process msa
 
 nproc_msa: 
-  hhblits: 16
-  jackhmmer: 8
+  hhblits: 16 # Number of processors used by hhblits
+  jackhmmer: 8 # Number of processors used by jackhmmer
 
 # File paths
 

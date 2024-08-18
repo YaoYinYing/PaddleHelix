@@ -33,9 +33,16 @@ FeatureDict = MutableMapping[str, np.ndarray]
 TemplateSearcher = Union[hhsearch.HHSearch, hmmsearch.Hmmsearch]
 
 class MsaRunner(Protocol):
+    n_cpu: int
+    
     def query(self, input_fasta_path: str) -> Sequence[Mapping[str, Any]]:
         """Runs the MSA tool on the input fasta file."""
         ...
+
+def check_used_ncpus(used: list[int]):
+   ncpus_sum=sum(used)
+   if ncpus_sum >os.cpu_count():
+      logging.warning(f"The number of used CPUs({ncpus_sum}) is larger than the number of available CPUs({os.cpu_count()}).")
 
 def make_sequence_features(
     sequence: str, description: str, num_res: int) -> FeatureDict:
@@ -170,10 +177,10 @@ class DataPipeline:
     self.use_precomputed_msas = use_precomputed_msas
 
   def parallel_msa_joblib(self, func, input_args: list):
-    return Parallel(len(input_args))(delayed(func)(args) for args in input_args)
+    return Parallel(len(input_args),verbose=100)(delayed(func)(args) for args in input_args)
 
 
-  def process(self, input_fasta_path: str, msa_output_dir: str) -> FeatureDict:
+  def process(self, input_fasta_path: str, msa_output_dir: str,other_args: Optional[tuple] = None) -> FeatureDict:
     """Runs alignment tools on the input sequence and creates features."""
     with open(input_fasta_path) as f:
       input_fasta_str = f.read()
@@ -186,7 +193,7 @@ class DataPipeline:
     num_res = len(input_sequence)
 
 
-    msa_tasks = []
+    msa_tasks: list[Tuple[MsaRunner, str, str, str, bool, int]] = []
     """uniref90_out_path = os.path.join(msa_output_dir, 'uniref90_hits.sto')
     jackhmmer_uniref90_result = run_msa_tool(
         msa_runner=self.jackhmmer_uniref90_runner,
@@ -225,12 +232,16 @@ class DataPipeline:
         'sto' if self._use_small_bfd else 'a3m',
         self.use_precomputed_msas,
         0))
+    
+    msa_tasks.append(other_args)
 
+    check_used_ncpus(used=[mask[0].n_cpu for mask in msa_tasks if hasattr(mask[0], 'n_cpu')])
 
     [
         jackhmmer_uniref90_result,
         jackhmmer_mgnify_result,
         bfd_result,
+        
     ] = self.parallel_msa_joblib(func=run_msa_tool,
                           input_args=msa_tasks)
 
