@@ -182,7 +182,7 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
        '-output', mmcif_path,
        ]
   
-  print('Launching subprocess "%s"', ' '.join(cmd))
+  print(f'Launching subprocess "{" " .join(cmd)}"', )
 
   if os.path.exists('maxit.log'):
      os.remove('maxit.log')
@@ -197,7 +197,7 @@ def prediction_to_mmcif(pred_atom_pos: Union[np.ndarray, paddle.Tensor],
 
 
   if retcode:
-    # Logs have a 15k character limit, so log HHblits error line by line.
+    # Logs have a 15k character limit, so log Maxit error line by line.
     print('Maxit failed. Maxit stderr begin:')
     raise RuntimeError(f'Maxit failed\nstdout:\n{stdout.decode("utf-8")}\n\n'
                        f'stderr:\n{stderr[:500_000].decode("utf-8")}\n'

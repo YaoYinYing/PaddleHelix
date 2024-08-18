@@ -152,7 +152,9 @@ def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
         template_searcher=template_searcher,
         template_featurizer=template_featurizer,
         use_small_bfd=cfg.use_small_bfd,
-        use_precomputed_msas=use_precomputed_msas)
+        use_precomputed_msas=use_precomputed_msas,
+        nprocs=cfg.nproc_msa,
+        )
 
     prot_data_pipeline = pipeline_multimer.DataPipeline(
         monomer_data_pipeline=monomer_data_pipeline,
