@@ -2,9 +2,10 @@
 import collections
 import copy
 import os
+from pathlib import Path
 import time, gzip, pickle
 import numpy as np
-import logging
+from absl import logging
 from helixfold.common import residue_constants
 from helixfold.data import parsers
 from helixfold.data import pipeline_multimer
@@ -14,7 +15,6 @@ from helixfold.data import label_utils
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from .preprocess import digit2alphabet
 
-logger = logging.getLogger(__file__)
 
 POLYMER_STANDARD_RESI_ATOMS = residue_constants.residue_atoms
 STRING_FEATURES = ['all_chain_ids', 'all_ccd_ids','all_atom_ids', 
@@ -356,7 +356,7 @@ def process_chain_msa(args):
     data_pipeline, chain_id, seq, desc, \
     msa_output_dir, features_pkl = args
     if features_pkl.exists():
-        logger.info('Use cached features.pkl')
+        logging.info('Use cached features.pkl')
         with open(features_pkl, 'rb') as f:
             raw_features = pickle.load(f)
     else:
@@ -450,7 +450,7 @@ def process_input_json(all_entitys, ccd_preprocessed_path,
 
       ## 2. multiprocessing for protein/rna MSA/Template search.
       seqs_to_msa_features = {}
-      logger.info('[Multiprocess] starting MSA/Template search...')
+      logging.info('[Multiprocess] starting MSA/Template search...')
       t0 = time.time()
       with ProcessPoolExecutor() as executor:
           futures = [executor.submit(process_chain_msa, task) for task in tasks]
@@ -461,8 +461,8 @@ def process_input_json(all_entitys, ccd_preprocessed_path,
                   seqs_to_msa_features[seqs] = raw_features
               except Exception as exc:
                   import traceback; traceback.print_exc()
-                  logger.error(f'Task generated an exception : {exc}')
-      logger.info(f'[Multiprocess] All msa/template use: {time.time() - t0}')
+                  logging.error(f'Task generated an exception : {exc}')
+      logging.info(f'[Multiprocess] All msa/template use: {time.time() - t0}')
 
       ## 3. add msa_templ_feats to all_chain_features.
       for type_chain_id in all_chain_features.keys():
