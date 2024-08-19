@@ -107,6 +107,13 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
       features['ref_element'].append(np.array([element_map_with_x(t[0].upper() + t[1:].lower())
                                               for t in _ccd_feats['atom_symbol']], dtype=np.int32))
       features['ref_charge'].append(np.array(_ccd_feats['charge'], dtype=np.int32))
+
+      # atom checks
+      for atom_id in _ccd_feats['atom_ids']:
+        converted_atom_id_name=convert_atom_id_name(atom_id)
+        if max(converted_atom_id_name)>= 64:
+          raise ValueError(f'>>> Problematic atom in ligand ({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
+      
       features['ref_atom_name_chars'].append(
                               np.array([convert_atom_id_name(atom_id) for atom_id in _ccd_feats['atom_ids']]
                                                                 , dtype=np.int32))
@@ -135,12 +142,8 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
     features[k] = np.concatenate(v, axis=0)
   features['ref_atom_count'] = np.bincount(features['ref_token2atom_idx'])
 
-  if (_ref_element:=np.max(features['ref_element'])) >= 128:
-     raise ValueError(f'ref_element= {_ref_element}, which is larger then 128.\n{features["ref_element"]}\n{"-"*79}')
-
-  
-  if (_ref_atom_name_chars:=np.max(features['ref_atom_name_chars'])) >= 64:
-     raise ValueError(f'ref_atom_name_chars= {_ref_atom_name_chars}, which is larger then 64.\n{features["ref_atom_name_chars"]}\n{"-"*79}')
+  if (len_ref_element:=np.max(features['ref_element'])) >= 128:
+     raise ValueError(f'{len_ref_element=}, which is larger then 128.\n{features["ref_element"]}\n{"-"*79}')
 
   assert len(set([len(v) for k, v in features.items() if k != 'ref_atom_count'])) == 1 ## To check same Atom-level features. # WTF?
   return features
