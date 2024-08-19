@@ -16,6 +16,8 @@ import sys
 import subprocess
 import tempfile
 import itertools
+from absl import logging
+from typing import Tuple, Union, Mapping, Literal, Callable, Any
 import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -138,26 +140,54 @@ def smiles_to_ETKDGMol(smiles):
     return optimal_mol_wo_H
 
 
-def smiles_toMol_obabel(smiles):
-    """
-        generate mol from smiles using obabel;
-    """    
-    
-    OBABEL_BIN = os.getenv('OBABEL_BIN')
-    if not (OBABEL_BIN and os.path.isfile(OBABEL_BIN)):
-        raise FileNotFoundError(f'Cannot find obabel binary at {OBABEL_BIN}.')
-    
-    with tempfile.NamedTemporaryFile(suffix=".mol2") as temp_file:
-        print(f"[OBABEL] Temporary file created: {temp_file.name}")
-        obabel_cmd = f"{OBABEL_BIN} -:'{smiles}' -omol2 -O{temp_file.name} --gen3d"
+class Mol2MolObabel:
+    def __init__(self):
+        self.obabel_bin = os.getenv('OBABEL_BIN')
+        if not (self.obabel_bin and os.path.isfile(self.obabel_bin)):
+            raise FileNotFoundError(f'Cannot find obabel binary at {self.obabel_bin}.')
+        
+        # Get the supported formats
+        self.supported_formats: Tuple[str] = self._get_supported_formats()
+
+    def _get_supported_formats(self) -> Tuple[str]:
+        """
+        Retrieves the list of supported formats from obabel and filters out write-only formats.
+        
+        Returns:
+            tuple: A tuple of supported input formats.
+        """
+        obabel_cmd = f"{self.obabel_bin} -L formats"
         ret = subprocess.run(obabel_cmd, shell=True, capture_output=True, text=True)
-        mol = Chem.MolFromMol2File(temp_file.name, sanitize=False)
-        if '3D coordinate generation failed' in ret.stderr:
-            mol = generate_ETKDGv3_conformer(mol)
-        optimal_mol_wo_H = Chem.RemoveAllHs(mol, sanitize=False)
-    return optimal_mol_wo_H
+        formats = [line.split()[0] for line in ret.stdout.splitlines() if '[Write-only]' not in line]
+        formats.append('smiles')
+        
+        return tuple(formats)
 
+    def _perform_conversion(self, input_type: str, input_value: str) -> Chem.Mol:
+        with tempfile.NamedTemporaryFile(suffix=".mol2") as temp_file:
+            print(f"[OBABEL] Temporary file created: {temp_file.name}")
+            if input_type == 'smiles':
+                obabel_cmd = f"{self.obabel_bin} -:'{input_value}' -omol2 -O{temp_file.name} --gen3d"
+            else:
+                obabel_cmd = f"{self.obabel_bin} -i {input_type} {input_value} -omol2 -O{temp_file.name} --gen3d"
+            ret = subprocess.run(obabel_cmd, shell=True, capture_output=True, text=True)
+            mol = Chem.MolFromMol2File(temp_file.name, sanitize=False)
+            if '3D coordinate generation failed' in ret.stderr:
+                mol = generate_ETKDGv3_conformer(mol)
+            optimal_mol_wo_H = Chem.RemoveAllHs(mol, sanitize=False)
+            logging.debug(f'Converted `{input_type}`: {input_value}')
+            return optimal_mol_wo_H
 
+    def _convert_to_mol(self, input_type: str, input_value: str) -> Chem.Mol:
+        if input_type not in self.supported_formats:
+            raise ValueError(f'Unsupported small molecule input: {input_type}. \nSupported formats: \n{self.supported_formats}\n')
+
+        if input_type != 'smiles' and not os.path.isfile(input_value):
+            raise FileNotFoundError(f'Cannot find the {input_type.upper()} file at {input_value}.')
+        
+        return self._perform_conversion(input_type, input_value)
+
+    __call__: Callable[[str, str], Chem.Mol] = _convert_to_mol
 def polymer_convert(items):
     """
         "type": "protein",                          
@@ -192,7 +222,7 @@ def polymer_convert(items):
     }
 
 
-def ligand_convert(items):
+def ligand_convert(items: Mapping[str, Union[int, str]]):
     """
         "type": "ligand",
         "ccd": "ATP", or "smiles": "CCccc(O)ccc",
@@ -200,22 +230,31 @@ def ligand_convert(items):
     """
     dtype = items['type']
     count = items['count']
+    converter=Mol2MolObabel()
     
     msa_seqs = ""
     _ccd_seqs = []
     ccd_to_extra_mol_infos = {}
     if 'ccd' in items:
         _ccd_seqs.append(f"({items['ccd']})")
-    elif 'smiles' in items:
-        _ccd_seqs.append(f"(UNK-)")
+
+    
+    elif any(f in items for f in converter.supported_formats):
+        for k in converter.supported_formats:
+            if k in items:
+                break
+
+        ligand_name="UNK-"
+        _ccd_seqs.append(f"({ligand_name})")
         # mol_wo_h = smiles_to_ETKDGMol(items['smiles'])
-        mol_wo_h = smiles_toMol_obabel(items['smiles'])
+        
+        mol_wo_h = converter(k, items[k])
         _extra_mol_infos = make_basic_info_fromMol(mol_wo_h)
         ccd_to_extra_mol_infos = {
-            "UNK-": _extra_mol_infos
+            ligand_name: _extra_mol_infos
         }
     else:
-        raise ValueError(f'not support for the {dtype} in ligand_convert')
+        raise ValueError(f'not support for the {dtype} in ligand_convert, please check the input. \nSupported input: {converter.supported_formats}')
     ccd_seqs = ''.join(_ccd_seqs) ## (GLY)(ALA).....
 
     # repeat_ccds, repeat_fasta = [ccd_seqs], [msa_seqs]

@@ -102,16 +102,15 @@ def preprocess_json_entity(json_path, out_dir):
 def convert_to_json_compatible(obj):
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    elif isinstance(obj, np.integer):
+    if isinstance(obj, np.integer):
         return int(obj)
-    elif isinstance(obj, np.floating):
+    if isinstance(obj, np.floating):
         return float(obj)
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         return {k: convert_to_json_compatible(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [convert_to_json_compatible(i) for i in obj]
-    else:
-        return obj
+    return obj
 
 def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
     """Helper function to resolve the binary path."""
