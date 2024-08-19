@@ -114,7 +114,7 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
         converted_atom_id_name=convert_atom_id_name(atom_id.upper())
         if max(converted_atom_id_name)>= 64:
           raise ValueError(f'>>> Problematic atom in ligand ({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
-        logging.debug(f'({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
+        # logging.debug(f'({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
       
       features['ref_atom_name_chars'].append(
                               np.array([convert_atom_id_name(atom_id.upper()) for atom_id in _ccd_feats['atom_ids']]
