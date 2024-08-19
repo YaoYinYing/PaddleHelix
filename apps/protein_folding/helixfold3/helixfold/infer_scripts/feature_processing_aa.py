@@ -3,8 +3,9 @@ import collections
 import copy
 import os
 from pathlib import Path
-import time, gzip, pickle
-from typing import Optional, Tuple
+import pickle
+from typing import Optional, Tuple, Any
+
 import numpy as np
 from absl import logging
 
@@ -17,6 +18,8 @@ from helixfold.data import pipeline_rna_multimer
 from helixfold.data import pipeline_conf_bonds, pipeline_token_feature, pipeline_hybrid
 from helixfold.data import label_utils
 
+from helixfold.data.tools import utils
+
 from .preprocess import digit2alphabet
 
 
@@ -24,20 +27,6 @@ POLYMER_STANDARD_RESI_ATOMS = residue_constants.residue_atoms
 STRING_FEATURES = ['all_chain_ids', 'all_ccd_ids','all_atom_ids', 
                   'release_date','label_ccd_ids','label_atom_ids']
 
-def load_ccd_dict(ccd_preprocessed_path):
-    assert os.path.exists(ccd_preprocessed_path),\
-              (f'[CCD] ccd_preprocessed_path: {ccd_preprocessed_path} not exist.')
-    st_1 = time.time()
-    if 'pkl.gz' in ccd_preprocessed_path:
-        with gzip.open(ccd_preprocessed_path, "rb") as fp:
-            ccd_preprocessed_dict = pickle.load(fp)
-    elif '.pkl' in ccd_preprocessed_path:
-        with open(ccd_preprocessed_path, "rb") as fp:
-            ccd_preprocessed_dict = pickle.load(fp)
-    print(f'[CCD] load ccd dataset done. use {time.time()-st_1}s;'\
-                    f'Has length of {len(ccd_preprocessed_dict)}')
-    
-    return ccd_preprocessed_dict
 
 
 def crop_msa(feat, max_msa_depth=16384):
@@ -385,7 +374,7 @@ def process_input_json(all_entitys, ccd_preprocessed_path,
                           no_msa_templ_feats=False):
 
     ## load ccd dict.
-    ccd_preprocessed_dict = load_ccd_dict(ccd_preprocessed_path)
+    ccd_preprocessed_dict = pipeline_conf_bonds.load_ccd_dict(ccd_preprocessed_path)
     all_chain_features = {}
     sequence_features = {} 
     num_chains = 0

@@ -7,11 +7,10 @@ from typing import Any, MutableMapping, Optional, List
 from absl import logging
 from helixfold.common import residue_constants
 from helixfold.data import parsers
-from helixfold.data.tools import utils
+from helixfold.data.pipeline_conf_bonds import load_ccd_dict
 import numpy as np
 import json
-import gzip
-import pickle
+
 from rdkit import Chem
 
 FeatureDict = MutableMapping[str, np.ndarray]
@@ -212,14 +211,7 @@ class DataPipeline:
       assembly_dict = unit_dict
 
     if ccd_preprocessed_dict is None:
-      ccd_preprocessed_dict = {}
-
-    if not 'pkl.gz' in self.ccd_preprocessed_path:
-      raise ValueError(f'Invalid ccd_preprocessed_path: {self.ccd_preprocessed_path}')
-
-    with utils.timing('Loading CCD dataset'):
-      with gzip.open(self.ccd_preprocessed_path, "rb") as fp:
-          ccd_preprocessed_dict = pickle.load(fp)
+      ccd_preprocessed_dict=load_ccd_dict(self.ccd_preprocessed_path)
 
     if select_mmcif_chainID is not None:
       select_mmcif_chainID = set(select_mmcif_chainID)
