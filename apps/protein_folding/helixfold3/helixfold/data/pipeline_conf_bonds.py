@@ -107,9 +107,9 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
     features[k] = np.concatenate(v, axis=0)
   features['ref_atom_count'] = np.bincount(features['ref_token2atom_idx'])
 
-  assert np.max(features['ref_element']) < 128
-  assert np.max(features['ref_atom_name_chars']) < 64
-  assert len(set([len(v) for k, v in features.items() if k != 'ref_atom_count'])) == 1 ## To check same Atom-level features.
+  assert np.max(features['ref_element']) < 128 # WTF?
+  assert np.max(features['ref_atom_name_chars']) < 64 # WTF?
+  assert len(set([len(v) for k, v in features.items() if k != 'ref_atom_count'])) == 1 ## To check same Atom-level features. # WTF?
   return features
 
 

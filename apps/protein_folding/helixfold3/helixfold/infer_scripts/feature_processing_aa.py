@@ -4,15 +4,19 @@ import copy
 import os
 from pathlib import Path
 import time, gzip, pickle
+from typing import Optional, Tuple
 import numpy as np
 from absl import logging
+
+
 from helixfold.common import residue_constants
 from helixfold.data import parsers
-from helixfold.data import pipeline_multimer
+from helixfold.data.tools import utils
+from helixfold.data import pipeline_multimer, pipeline_multimer_parallel
 from helixfold.data import pipeline_rna_multimer
 from helixfold.data import pipeline_conf_bonds, pipeline_token_feature, pipeline_hybrid
 from helixfold.data import label_utils
-from concurrent.futures import ProcessPoolExecutor, as_completed
+
 from .preprocess import digit2alphabet
 
 
@@ -330,7 +334,7 @@ def add_assembly_features(all_chain_features, ccd_preprocessed_dict, no_msa_temp
           "label": label,}
 
 
-def process_chain_msa(args):
+def process_chain_msa(args: tuple[pipeline_multimer_parallel.DataPipeline, str, Optional[str],Optional[str], os.PathLike,os.PathLike ]) -> Tuple[str,dict, str, str]:
     """
     处理链，如果缓存了特征文件，则直接使用缓存的特征文件，否则生成新的特征文件。
     
@@ -360,12 +364,12 @@ def process_chain_msa(args):
         with open(features_pkl, 'rb') as f:
             raw_features = pickle.load(f)
     else:
-        t0 = time.time()
-        raw_features = data_pipeline._process_single_chain(
-            chain_id, sequence=seq, description=desc,
-            msa_output_dir=msa_output_dir,
-            is_homomer_or_monomer=False)
-        print(f'[MSA/Template] {desc}; seq length: {len(seq)}; use: {time.time() - t0}')
+        with utils.timing(f'[MSA/Template]({desc}) with seq length: {len(seq)}'):
+          raw_features = data_pipeline._process_single_chain(
+              chain_id, sequence=seq, description=desc,
+              msa_output_dir=msa_output_dir,
+              is_homomer_or_monomer=False)
+       
 
         with open(features_pkl, 'wb') as f:
             pickle.dump(raw_features, f, protocol=4)
@@ -450,19 +454,10 @@ def process_input_json(all_entitys, ccd_preprocessed_path,
 
       ## 2. multiprocessing for protein/rna MSA/Template search.
       seqs_to_msa_features = {}
-      logging.info('[Multiprocess] starting MSA/Template search...')
-      t0 = time.time()
-      with ProcessPoolExecutor() as executor:
-          futures = [executor.submit(process_chain_msa, task) for task in tasks]
-
-          for future in as_completed(futures):
-              try:
-                  _, raw_features, type_chain_id, seqs = future.result()
-                  seqs_to_msa_features[seqs] = raw_features
-              except Exception as exc:
-                  import traceback; traceback.print_exc()
-                  logging.error(f'Task generated an exception : {exc}')
-      logging.info(f'[Multiprocess] All msa/template use: {time.time() - t0}')
+      with utils.timing('MSA/Template search'):
+        for task in tasks:
+          _, raw_features, type_chain_id, seqs=process_chain_msa(task)
+          seqs_to_msa_features[seqs] = raw_features
 
       ## 3. add msa_templ_feats to all_chain_features.
       for type_chain_id in all_chain_features.keys():
