@@ -45,13 +45,14 @@ def element_map_with_x(atom_symbol):
   # ## one-hot max shape == 128
   return residue_constants.ATOM_ELEMENT.get(atom_symbol, 127)
 
-def convert_atom_id_name(atom_id: str) -> int:
+def convert_atom_id_name(atom_id: str) -> list[int]:
   """
     Converts unique atom_id names to integer of atom_name. need to be padded to length 4.
     Each character is encoded as ord(c) − 32
   """
+  if (len_atom_id:=len(atom_id))>4:
+     raise ValueError(f'atom_id: `{atom_id}` is too long, max length is 4.')
   atom_id_pad = atom_id.ljust(4, ' ')
-  assert len(atom_id_pad) == 4
   return [ord(c) - 32 for c in atom_id_pad]
 
 
@@ -110,12 +111,13 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
 
       # atom checks
       for atom_id in _ccd_feats['atom_ids']:
-        converted_atom_id_name=convert_atom_id_name(atom_id)
+        converted_atom_id_name=convert_atom_id_name(atom_id.upper())
         if max(converted_atom_id_name)>= 64:
           raise ValueError(f'>>> Problematic atom in ligand ({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
+        logging.debug(f'({residue_id=}, {ccd_id=}, {chain_id=}) {atom_id=}, {converted_atom_id_name=}')
       
       features['ref_atom_name_chars'].append(
-                              np.array([convert_atom_id_name(atom_id) for atom_id in _ccd_feats['atom_ids']]
+                              np.array([convert_atom_id_name(atom_id.upper()) for atom_id in _ccd_feats['atom_ids']]
                                                                 , dtype=np.int32))
       
       # here we get ref_space_uid [ Each (chain id, residue index) tuple is assigned an integer on first appearance.]
