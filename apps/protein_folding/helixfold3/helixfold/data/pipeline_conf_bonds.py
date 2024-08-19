@@ -1,9 +1,18 @@
 """Functions for building the input features (reference ccd features) for the HelixFold model."""
 
 import collections
-from typing import Optional
+import gzip
+import os
+import pickle
+from typing import Any, Optional
+
+from absl import logging
+from immutabledict import immutabledict
 from helixfold.common import residue_constants
 import numpy as np
+
+from helixfold.data.tools import utils
+
 
 ALLOWED_LIGAND_BONDS_TYPE = {
     "SING": 1,
@@ -12,6 +21,25 @@ ALLOWED_LIGAND_BONDS_TYPE = {
     "QUAD": 4, 
     "AROM": 12,
 }
+
+def load_ccd_dict(ccd_preprocessed_path: str) -> immutabledict[str, Any]:
+    if not os.path.exists(ccd_preprocessed_path):
+      raise FileNotFoundError(f'[CCD] ccd_preprocessed_path: {ccd_preprocessed_path} not exist.')
+    
+    if not ccd_preprocessed_path.endswith('.pkl.gz') and not ccd_preprocessed_path.endswith('.pkl'):
+        raise ValueError(f'[CCD] ccd_preprocessed_path: {ccd_preprocessed_path} not endswith .pkl.gz and .pkl')
+  
+    with utils.timing(f'Loading CCD dataset from {ccd_preprocessed_path}'):
+      if ccd_preprocessed_path.endswith('.pkl.gz'):
+          with gzip.open(ccd_preprocessed_path, "rb") as fp:
+              ccd_preprocessed_dict = immutabledict(pickle.load(fp))
+      else:
+          with open(ccd_preprocessed_path, "rb") as fp:
+              ccd_preprocessed_dict = immutabledict(pickle.load(fp))
+    
+    logging.info(f'CCD dataset contains {len(ccd_preprocessed_dict)} entries.')
+    
+    return ccd_preprocessed_dict
 
 def element_map_with_x(atom_symbol):
   # ## one-hot max shape == 128
@@ -107,8 +135,13 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
     features[k] = np.concatenate(v, axis=0)
   features['ref_atom_count'] = np.bincount(features['ref_token2atom_idx'])
 
-  assert np.max(features['ref_element']) < 128 # WTF?
-  assert np.max(features['ref_atom_name_chars']) < 64 # WTF?
+  if (_ref_element:=np.max(features['ref_element'])) >= 128:
+     raise ValueError(f'ref_element= {_ref_element}, which is larger then 128.\n{features["ref_element"]}\n{"-"*79}')
+
+  
+  if (_ref_atom_name_chars:=np.max(features['ref_atom_name_chars'])) >= 64:
+     raise ValueError(f'ref_atom_name_chars= {_ref_atom_name_chars}, which is larger then 64.\n{features["ref_atom_name_chars"]}\n{"-"*79}')
+
   assert len(set([len(v) for k, v in features.items() if k != 'ref_atom_count'])) == 1 ## To check same Atom-level features. # WTF?
   return features
 
