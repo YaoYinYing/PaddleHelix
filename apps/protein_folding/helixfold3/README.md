@@ -105,8 +105,8 @@ The script `scripts/download_all_data.sh` can be used to download and set up all
 
 There are some demo input under `./data/` for your test and reference. Data input is in the form of JSON containing
 several entities such as `protein`, `ligand`, `nucleic acids`, and `iron`. Proteins and nucleic acids inputs are their sequence.
-HelixFold3 supports input ligand as SMILES or CCD id, please refer to `/data/demo_6zcy_smiles.json` and `demo_output/demo_6zcy_smiles/` 
-for more details about SMILES input. More flexible input will come in soon.
+HelixFold3 supports input ligand as SMILES, CCD id or small molecule files, please refer to `/data/demo_6zcy_smiles.json` and `data/demo_p450_heme_sdf.json` 
+for more details about SMILES input. Flexible input from small molecule is now supported. See `obabel -L formats |grep -v 'Write-only'`
 
 A example of input data is as follows:
 ```json
