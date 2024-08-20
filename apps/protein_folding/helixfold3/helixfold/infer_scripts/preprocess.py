@@ -164,14 +164,14 @@ class Mol2MolObabel:
         
         return tuple(formats)
 
-    def _perform_conversion(self, input_type: str, input_value: str) -> Chem.Mol:
+    def _perform_conversion(self, input_type: str, input_value: str, generate_3d: bool=True) -> Chem.Mol:
         with tempfile.NamedTemporaryFile(suffix=".mol2") as temp_file, utils.timing(f'converting {input_type} to mol2: {input_value}'):
             if input_type == 'smiles':
-                obabel_cmd = f"{self.obabel_bin} -:'{input_value}' -omol2 -O{temp_file.name} --gen3d"
+                obabel_cmd = f"{self.obabel_bin} -:'{input_value}' -omol2 -O{temp_file.name} {'--gen3d' if generate_3d else ''}"
                 if len(input_value)>60:
                     logging.warning(f'This takes a while ...')
             else:
-                obabel_cmd = f"{self.obabel_bin} -i {input_type} {input_value} -omol2 -O{temp_file.name} --gen3d"
+                obabel_cmd = f"{self.obabel_bin} -i {input_type} {input_value} -omol2 -O{temp_file.name} {'--gen3d' if generate_3d else ''}"
             logging.debug(f'Launching command: `{obabel_cmd}`')
             ret = subprocess.run(obabel_cmd, shell=True, capture_output=True, text=True)
             mol = Chem.MolFromMol2File(temp_file.name, sanitize=False)
@@ -181,16 +181,16 @@ class Mol2MolObabel:
 
             return optimal_mol_wo_H
 
-    def _convert_to_mol(self, input_type: str, input_value: str) -> Chem.Mol:
+    def _convert_to_mol(self, input_type: str, input_value: str, generate_3d: bool=True) -> Chem.Mol:
         if input_type not in self.supported_formats:
             raise ValueError(f'Unsupported small molecule input: {input_type}. \nSupported formats: \n{self.supported_formats}\n')
 
         if input_type != 'smiles' and not os.path.isfile(input_value):
             raise FileNotFoundError(f'Cannot find the {input_type.upper()} file at {input_value}.')
         
-        return self._perform_conversion(input_type, input_value)
+        return self._perform_conversion(input_type, input_value, generate_3d)
 
-    __call__: Callable[[str, str], Chem.Mol] = _convert_to_mol
+    __call__: Callable[[str, str, bool], Chem.Mol] = _convert_to_mol
 def polymer_convert(items):
     """
         "type": "protein",                          
@@ -251,7 +251,7 @@ def ligand_convert(items: Mapping[str, Union[int, str]]):
         _ccd_seqs.append(f"({ligand_name})")
         # mol_wo_h = smiles_to_ETKDGMol(items['smiles'])
         
-        mol_wo_h = converter(k, items[k])
+        mol_wo_h = converter(k, items[k], items.get('use_3d', True))
         _extra_mol_infos = make_basic_info_fromMol(mol_wo_h)
         ccd_to_extra_mol_infos = {
             ligand_name: _extra_mol_infos
