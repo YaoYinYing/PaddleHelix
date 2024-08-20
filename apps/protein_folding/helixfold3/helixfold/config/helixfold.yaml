@@ -60,7 +60,7 @@ preset:
 
 # Other configurations
 other:
-  maxit_binary: /mnt/data/yinying/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
+  maxit_binary: /mnt/data/software/maxit/maxit-v11.100-prod-src/bin/maxit  # Corresponds to --maxit_binary
 
 
 # CONFIG_DIFFS for advanced configuration

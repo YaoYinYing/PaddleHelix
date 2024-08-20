@@ -39,14 +39,17 @@ def model_config(config_diffs: Union[str, DictConfig, dict[str, dict[str, Any]]]
       cfg.merge_with_dotlist(updated_config)
       print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
 
-      return cfg
     
     # update from detailed configuration
     if any(root_kw in config_diffs for root_kw in CONFIG_ALLATOM):
 
-      cfg.merge_with(config_diffs) # merge to override
-      print(f'Updated config from `CONFIG_DIFFS`: {config_diffs}')
-      return cfg
+      for root_kw in CONFIG_ALLATOM:
+        if root_kw not in config_diffs:
+          continue
+        cfg.merge_with(DictConfig({root_kw:config_diffs[root_kw]})) # merge to override
+        print(f'Updated config from `CONFIG_DIFFS`:{root_kw}: {config_diffs[root_kw]}')
+    
+    return cfg
   
   raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
     
