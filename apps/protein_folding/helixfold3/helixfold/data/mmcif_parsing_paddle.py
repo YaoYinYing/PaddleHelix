@@ -34,7 +34,6 @@ PdbStructure = PDB.Structure.Structure
 SeqRes = str
 MmCIFDict = Mapping[str, Sequence[str]]
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 @dataclasses.dataclass(frozen=True)
 class Monomer:
