@@ -115,6 +115,7 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
 
         # Append the CovalentBond instance to the list
         covalent_bonds.append(covalent_bond)
+        logging.info(f"Added {len(covalent_bonds)} bonds: {covalent_bonds}")
 
     return covalent_bonds
 
@@ -306,6 +307,8 @@ def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_pr
   chainId_to_type = {}
   ligand_bond_type = [] # (i, j, bond_type), represent the bond between token i and token j
   bond_index = [] # (i,j) represent the bond between token i and token j
+
+  ccd_id2atom_ids: dict[str, list]={}
   ccd_standard_set = residue_constants.STANDARD_LIST
   for chain_type_id, ccd_seq in all_chain_info.items():
       chain_type, chain_id = chain_type_id.rsplit('_', 1)
@@ -326,6 +329,8 @@ def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_pr
             else:
                 _ccd_feats = ccd_preprocessed_dict[ccd_id]
             atom_ids = _ccd_feats['atom_ids']
+
+            ccd_id2atom_ids[ccd_id] = atom_ids
             assert len(atom_ids) > 0, f'TODO filter - Got CCD <{ccd_id}>: 0 atom nums.'
             
             all_token_nums += len(atom_ids)
@@ -372,16 +377,43 @@ def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_pr
           ptnr2_label_seq_id = ptnr2_auth_seq_id
 
       try:
-        assert ptnr1_label_asym_id in chainId_to_ccd_list and ptnr2_label_asym_id in chainId_to_ccd_list
+        if not (ptnr1_label_asym_id in chainId_to_ccd_list and ptnr2_label_asym_id in chainId_to_ccd_list):
+           raise ValueError(f"Invalid chain id:\n{ptnr1_label_asym_id}/{ptnr2_label_asym_id}\n{chainId_to_ccd_list}")
         ptnr1_ccd_id = chainId_to_ccd_list[ptnr1_label_asym_id][int(ptnr1_label_seq_id) - 1]
         ptnr2_ccd_id = chainId_to_ccd_list[ptnr2_label_asym_id][int(ptnr2_label_seq_id) - 1]
-        assert ptnr1_ccd_id == ptnr1_label_comp_id and ptnr2_ccd_id == ptnr2_label_comp_id
-      except:
+
+
+        # renamed ligand residues
+
+
+        if ptnr1_ccd_id != ptnr1_label_comp_id:
+           logging.warning(f"Find ligand residue: {ptnr1_label_comp_id} -> {ptnr1_ccd_id}")
+           #ptnr1_label_comp_id = ptnr1_ccd_id
+
+        if ptnr2_ccd_id != ptnr2_label_comp_id:
+           logging.warning(f"Find ligand residue: {ptnr2_label_comp_id} -> {ptnr2_ccd_id}")
+           #ptnr2_label_comp_id = ptnr2_ccd_id
+
+      except ValueError as e:
         ## some convalent-bond from mmcif is misslead, pass it.
+        logging.warning(f'Error occurred during covalent bond processing: {e}')
         continue
+
+
       
-      ptnr1_ccd_atoms_list = ccd_preprocessed_dict[ptnr1_ccd_id]['atom_ids']
-      ptnr2_ccd_atoms_list = ccd_preprocessed_dict[ptnr2_ccd_id]['atom_ids']
+      if ptnr1_ccd_id in ccd_preprocessed_dict:
+        ptnr1_ccd_atoms_list = ccd_preprocessed_dict[ptnr1_ccd_id]['atom_ids']
+      else:
+        ptnr1_ccd_atoms_list = ccd_id2atom_ids[ptnr1_ccd_id]
+        
+      logging.debug(f'{ptnr1_ccd_id=}: {ptnr1_ccd_atoms_list=}')
+      
+      if ptnr2_ccd_id in ccd_preprocessed_dict:
+        ptnr2_ccd_atoms_list = ccd_preprocessed_dict[ptnr2_ccd_id]['atom_ids']
+      else:
+        ptnr2_ccd_atoms_list  = ccd_id2atom_ids[ptnr2_ccd_id]
+
+      logging.debug(f'{ptnr2_ccd_id=}: {ptnr2_ccd_atoms_list=}')
 
       if ptnr1_ccd_id in ccd_standard_set:  
           ## if ccd_id is in the standard residue in HF3 (table 13), we didn't have to map to atom-leval index

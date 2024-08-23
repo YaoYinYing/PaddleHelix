@@ -180,16 +180,20 @@ class Mol2MolObabel:
         if input_type == 'mol2' and input_value.endswith('.mol2'):
             return self._load_mol(mol2_file=input_value)
         
-        with tempfile.NamedTemporaryFile(suffix=".mol2") as temp_file, utils.timing(f'converting {input_type} to mol2: {input_value}'):
+        save_path=os.path.join('ligands',f'{os.path.basename(input_value)[:-(len(input_type)+1)] if input_type != "smiles" else "UNK"}.mol2')
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        with utils.timing(f'converting {input_type} to mol2: {input_value}'):
             if input_type == 'smiles':
-                obabel_cmd = f"{self.obabel_bin} -:'{input_value}' -omol2 -O{temp_file.name} {'--gen3d' if generate_3d else ''}"
+                obabel_cmd = f"{self.obabel_bin} -:'{input_value}' -omol2 -O{save_path} {'--gen3d' if generate_3d else ''}"
                 if len(input_value)>60:
                     logging.warning(f'This takes a while ...')
             else:
-                obabel_cmd = f"{self.obabel_bin} -i {input_type} {input_value} -omol2 -O{temp_file.name} {'--gen3d' if generate_3d else ''}"
+                obabel_cmd = f"{self.obabel_bin} -i {input_type} {input_value} -omol2 -O{save_path} {'--gen3d' if generate_3d else ''}"
             logging.debug(f'Launching command: `{obabel_cmd}`')
             ret = subprocess.run(obabel_cmd, shell=True, capture_output=True, text=True)
-            return self._load_mol(mol2_file=temp_file.name, ret=ret)
+            return self._load_mol(mol2_file=save_path, ret=ret)
             
     def _convert_to_mol(self, input_type: str, input_value: str, generate_3d: bool=True) -> Chem.Mol:
         if input_type not in self.supported_formats:
