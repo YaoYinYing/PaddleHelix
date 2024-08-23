@@ -1,17 +1,21 @@
 """Functions for building the input features (reference ccd features) for the HelixFold model."""
 
 import collections
+from dataclasses import dataclass
 import gzip
 import os
 import pickle
-from typing import Any, Optional
+import re
+from typing import Any, List, Literal, Optional, Tuple
 
 from absl import logging
 from immutabledict import immutabledict
-from helixfold.common import residue_constants
 import numpy as np
+from openbabel import openbabel
 
+from helixfold.common import residue_constants
 from helixfold.data.tools import utils
+
 
 
 ALLOWED_LIGAND_BONDS_TYPE = {
@@ -21,6 +25,98 @@ ALLOWED_LIGAND_BONDS_TYPE = {
     "QUAD": 4, 
     "AROM": 12,
 }
+
+# Define the possible bond types as a Literal
+BondType = Literal["covale", "metal", "hydrogen", "ionic", "disulfide", "aromatic"]
+
+
+@dataclass
+class AtomPartner:
+    """
+    Represents one partner atom in a covalent bond.
+
+    Attributes:
+        label_asym_id (str): The asymmetry identifier for the partner atom (i.e., chain ID).
+        label_comp_id (str): The component identifier for the partner atom (i.e., residue name).
+        seq_id (str): The sequence identifier for the partner atom (merged label_seq_id and auth_seq_id).
+        label_atom_id (str): The atom identifier for the partner atom (i.e., atom name).
+    """
+
+    label_asym_id: str  # Chain ID
+    label_comp_id: str  # Residue name
+    seq_id: str         # Merged sequence ID
+    label_atom_id: str  # Atom name
+
+
+@dataclass
+class CovalentBond:
+    """
+    Represents a covalent bond between two atoms in a molecular structure.
+
+    Attributes:
+        atom_1 (AtomPartner): The first partner atom in the bond.
+        atom_2 (AtomPartner): The second partner atom in the bond.
+        bond_type (BondType): The type of the bond.
+        pdbx_dist_value (float): The distance value as defined in the PDBx/mmCIF format.
+    """
+
+    atom_1: AtomPartner
+    atom_2: AtomPartner
+    bond_type: BondType
+    pdbx_dist_value: float
+
+def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
+    """
+    Parses a human-readable string into a list of CovalentBond objects.
+
+    Args:
+        input_string (str): A string representing covalent bonds, where each bond is
+                            described by two atom partners separated by a comma,
+                            and multiple bonds are separated by semicolons.
+                            Example: "A,GLY,25,CA,A,GLY,25,N,covale,1.32; B,HIS,58,ND1,B,HIS,58,CE1,covale,1.39"
+
+    Returns:
+        List[CovalentBond]: A list of CovalentBond objects.
+    """
+    covalent_bonds = []
+
+    # Split the input string by semicolons to separate individual covalent bonds
+    bond_strings = input_string.split(';')
+
+    for bond_str in bond_strings:
+        # Split the individual bond string by commas to separate attributes
+        bond_parts = bond_str.split(',')
+
+        if len(bond_parts) != 10:
+            raise ValueError(f"Invalid bond format: {bond_str}. Expected 10 fields per bond.")
+
+        # Create AtomPartner instances for the two atoms in the bond
+        atom_1 = AtomPartner(
+            label_asym_id=bond_parts[0].strip(),
+            label_comp_id=bond_parts[1].strip(),
+            seq_id=bond_parts[2].strip(),
+            label_atom_id=bond_parts[3].strip()
+        )
+
+        atom_2 = AtomPartner(
+            label_asym_id=bond_parts[4].strip(),
+            label_comp_id=bond_parts[5].strip(),
+            seq_id=bond_parts[6].strip(),
+            label_atom_id=bond_parts[7].strip()
+        )
+
+        # Create a CovalentBond instance
+        covalent_bond = CovalentBond(
+            atom_1=atom_1,
+            atom_2=atom_2,
+            bond_type=bond_parts[8].strip(),
+            pdbx_dist_value=float(bond_parts[9].strip())
+        )
+
+        # Append the CovalentBond instance to the list
+        covalent_bonds.append(covalent_bond)
+
+    return covalent_bonds
 
 def load_ccd_dict(ccd_preprocessed_path: str) -> immutabledict[str, Any]:
     if not os.path.exists(ccd_preprocessed_path):
@@ -151,7 +247,7 @@ def make_ccd_conf_features(all_chain_info, ccd_preprocessed_dict,
   return features
 
 
-def make_bond_features(covalent_bond, all_chain_info, ccd_preprocessed_dict, 
+def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_preprocessed_dict, 
                                       extra_feats: Optional[dict]=None):
   """
       all_chain_info: dict, (chain_type_chain_id): ccd_seq (list of ccd), such as: protein_A: ['ALA', 'MET', 'GLY']
@@ -172,24 +268,29 @@ def make_bond_features(covalent_bond, all_chain_info, ccd_preprocessed_dict,
   _set_chain_id_list = set(chain_id_list)
   parsed_covalent_bond = []
   for _bond in covalent_bond:
-    left_bond_atomid, right_bond_atomid = _bond['ptnr1_label_atom_id'], _bond['ptnr2_label_atom_id']
-    left_bond_name, right_bond_name = _bond['ptnr1_label_comp_id'], _bond['ptnr2_label_comp_id']
-    left_bond, right_bond = _bond['ptnr1_label_asym_id'], _bond['ptnr2_label_asym_id']
+    # Accessing the AtomPartner attributes for both atoms in the covalent bond
+    left_bond_atomid, right_bond_atomid = _bond.atom_1.label_atom_id, _bond.atom_2.label_atom_id
+    left_bond_name, right_bond_name = _bond.atom_1.label_comp_id, _bond.atom_2.label_comp_id
+    left_bond, right_bond = _bond.atom_1.label_asym_id, _bond.atom_2.label_asym_id
     
-    left_bond_idx, right_bond_idx = _bond['ptnr1_label_seq_id'], _bond['ptnr2_label_seq_id']
-    auth_left_idx, auth_right_idx = _bond['ptnr1_auth_seq_id'], _bond['ptnr2_auth_seq_id']
+    left_bond_idx, right_bond_idx = _bond.atom_1.seq_id, _bond.atom_2.seq_id
+    auth_left_idx, auth_right_idx = _bond.atom_1.seq_id, _bond.atom_2.seq_id
+
     left_bond_idx = 1 if left_bond_idx == '.' else left_bond_idx
     right_bond_idx = 1 if right_bond_idx == '.' else right_bond_idx
     
-    if _bond['bond_type'] != "covale":
+    if _bond.bond_type != "covale":
+      logging.warning(f'Ignore non-covale bond type: {_bond.bond_type}')
       continue
     
-    if _bond['pdbx_dist_value'] > 2.4:
+    if _bond.pdbx_dist_value > 2.4:
       # the covalent_bond is cut off by distance=2.4
+      logging.warning(f'Ignore bonding with distance > 2.4: {_bond.pdbx_dist_value}')
       continue
     
     ## When some chainID is filtered, bond need to be filtered too.
     if (left_bond not in _set_chain_id_list) or (right_bond not in _set_chain_id_list):
+      logging.warning(f'Ignore bonding with left and right out of chain list: ')
       continue
 
     parsed_covalent_bond.append([left_bond, left_bond_name, left_bond_idx, left_bond_atomid, auth_left_idx,
