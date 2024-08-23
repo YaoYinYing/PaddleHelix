@@ -31,6 +31,7 @@ from omegaconf import DictConfig
 import hydra
 
 from helixfold.common import all_atom_pdb_save
+from helixfold.data.pipeline_conf_bonds import load_ccd_dict
 from helixfold.model import config, utils
 from helixfold.data import pipeline_parallel as pipeline
 from helixfold.data import pipeline_multimer_parallel as pipeline_multimer
@@ -564,6 +565,25 @@ def main(cfg: DictConfig):
     print(f'============ Ranking ! ============')
     ranking_all_predictions(all_pred_path)
     print(f'============ Inference finished ! ============')
+
+
+@hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
+def show_atom_id_ccd(cfg: DictConfig):
+    ccd_preprocessed_path = cfg.db.ccd_preprocessed
+    
+
+    ccd_id=cfg.ccd_id
+    if len(ccd_id) <= 3 and ccd_id in (ccd_dict:=load_ccd_dict(ccd_preprocessed_path)):
+        logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
+        return
+
+
+
+    
+    
+
+
+
 
 if __name__ == '__main__':
     main()

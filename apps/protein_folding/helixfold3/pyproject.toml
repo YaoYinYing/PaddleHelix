@@ -47,3 +47,4 @@ joblib = "1.4.2"
 
 [tool.poetry.scripts]
 helixfold = 'helixfold.inference:main'
+helixfold_show_ccd = 'helixfold.inference:show_atom_id_ccd'
