@@ -454,7 +454,7 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_path,
 
 
     # gather all defined covalent bonds
-    all_covalent_bonds=[bond for entity in all_entitys for bond in entity.msa_seqs if bond.dtype == 'bond']
+    all_covalent_bonds=[bond for entity in all_entitys for bond in entity.msa_seqs if entity.dtype == 'bond']
 
     assert num_chains == len(all_chain_features.keys())
     all_feats = add_assembly_features(all_chain_features, ccd_preprocessed_dict, no_msa_templ_feats, all_covalent_bonds)

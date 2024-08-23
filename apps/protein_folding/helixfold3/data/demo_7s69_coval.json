@@ -12,7 +12,7 @@
         },
         {
             "type": "bond",
-            "bond": "A,ASN,74,ND2,B,UNK1,1,C,covale,2.3",
+            "bond": "A,ASN,74,ND2,B,UNK-1,1,C16,covale,2.3",
             "_comment": "'A,74,ND2:B,1:CW,null' from RF2AA"
         }
     ]
