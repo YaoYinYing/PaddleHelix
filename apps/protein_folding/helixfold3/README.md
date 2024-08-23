@@ -126,6 +126,49 @@ A example of input data is as follows:
 }
 ```
 
+Another example of **covalently modified** input:
+```json
+{
+    "entities": [
+        {
+            "type": "protein",
+            "sequence": "MDALYKSTVAKFNEVIQLDCSTEFFSIALSSIAGILLLLLLFRSKRHSSLKLPPGKLGIPFIGESFIFLRALRSNSLEQFFDERVKKFGLVFKTSLIGHPTVVLCGPAGNRLILSNEEKLVQMSWPAQFMKLMGENSVATRRGEDHIVMRSALAGFFGPGALQSYIGKMNTEIQSHINEKWKGKDEVNVLPLVRELVFNISAILFFNIYDKQEQDRLHKLLETILVGSFALPIDLPGFGFHRALQGRAKLNKIMLSLIKKRKEDLQSGSATATQDLLSVLLTFRDDKGTPLTNDEILDNFSSLLHASYDTTTSPMALIFKLLSSNPECYQKVVQEQLEILSNKEEGEEITWKDLKAMKYTWQVAQETLRMFPPVFGTFRKAITDIQYDGYTIPKGWKLLWTTYSTHPKDLYFNEPEKFMPSRFDQEGKHVAPYTFLPFGGGQRSCVGWEFSKMEILLFVHHFVKTFSSYTPVDPDEKISGDPLPPLPSKGFSIKLFPRP",
+            "count": 1
+        },
+        {
+            "type": "ligand",
+            "ccd": "HEM",
+            "count": 1
+        },
+        {
+            "type": "ligand",
+            "smiles": "CC1=C2CC[C@@]3(CCCC(=C)[C@H]3C[C@@H](C2(C)C)CC1)C",
+            "count": 1
+        },
+        {
+            "type": "bond",
+            "bond": "A,CYS,445,SG,B,HEM,1,FE,covale,2.3",
+            "_comment": "<chain-id>,<residue name>,<residue index>,<atom id>,<chain-id>,<residue name>,<residue index>,<atom id>,<bond type>,<bond length>",
+            "_also_comment": "For ccd input, use CCD key as residue name; for smiles and file input, use `UNK-<index>` where index is the chain order you input"
+        }
+    ]
+}
+```
+
+For seaking all atom ids in CCD database:
+```shell
+helixfold_show_ccd +ccd_id=HEM
+```
+
+This command outputs like:
+```text
+# output:
+[2024-08-23 22:44:36,324][absl][INFO] - Started Loading CCD dataset from /mnt/db/ccd/ccd_preprocessed_etkdg.pkl.gz
+[2024-08-23 22:44:43,236][absl][INFO] - Finished Loading CCD dataset from /mnt/db/ccd/ccd_preprocessed_etkdg.pkl.gz in 6.912 seconds
+[2024-08-23 22:44:43,237][absl][INFO] - CCD dataset contains 43488 entries.
+[2024-08-23 22:44:43,237][absl][INFO] - Atoms in HEM: ['CHA', 'CHB', 'CHC', 'CHD', 'C1A', 'C2A', 'C3A', 'C4A', 'CMA', 'CAA', 'CBA', 'CGA', 'O1A', 'O2A', 'C1B', 'C2B', 'C3B', 'C4B', 'CMB', 'CAB', 'CBB', 'C1C', 'C2C', 'C3C', 'C4C', 'CMC', 'CAC', 'CBC', 'C1D', 'C2D', 'C3D', 'C4D', 'CMD', 'CAD', 'CBD', 'CGD', 'O1D', 'O2D', 'NA', 'NB', 'NC', 'ND', 'FE']
+```
+
 #### Running HelixFold for Inference
 To run inference on a sequence or multiple sequences using HelixFold3's pretrained parameters, run e.g.:
 
