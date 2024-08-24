@@ -27,7 +27,8 @@ ALLOWED_LIGAND_BONDS_TYPE = {
 }
 
 # Define the possible bond types as a Literal
-BondType = Literal["covale", "metal", "hydrogen", "ionic", "disulfide", "aromatic"]
+# https://mmcif.wwpdb.org/dictionaries/mmcif_std.dic/Items/_struct_conn_type.id.html
+BondType = Literal["covale", "covale_base", "covale_phosphate", "covale_sugar", "disulf", "hydrog",'metalc','mismat','modres','saltbr']
 
 
 @dataclass
@@ -281,8 +282,8 @@ def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_pr
     right_bond_idx = 1 if right_bond_idx == '.' else right_bond_idx
     
     if _bond.bond_type != "covale":
-      logging.warning(f'Ignore non-covale bond type: {_bond.bond_type}')
-      continue
+      logging.warning(f'Detected non-covale bond type: {_bond.bond_type}')
+      # continue
     
     if _bond.pdbx_dist_value > 2.4:
       # the covalent_bond is cut off by distance=2.4
