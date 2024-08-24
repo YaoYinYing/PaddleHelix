@@ -115,7 +115,7 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
 
         # Append the CovalentBond instance to the list
         covalent_bonds.append(covalent_bond)
-        logging.info(f"Added {len(covalent_bonds)} bonds: {covalent_bonds}")
+    logging.info(f"Added {len(covalent_bonds)} bonds: {covalent_bonds}")
 
     return covalent_bonds
 
