@@ -18,7 +18,8 @@ ramdisk:  # Force to load database to ram disk
   uniref90: false # 67 GB
   mgnify: false # 64 GB
 
-
+mem:
+  hhblits: 64 # in GB
 
 nproc_msa: 
   hhblits: 16 # Number of processors used by hhblits

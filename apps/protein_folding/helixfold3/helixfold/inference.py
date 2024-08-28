@@ -145,6 +145,7 @@ def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm") -> str:
     target_path = os.path.join(ramdisk_path, pathlib.Path(file_path).name)
     with timing(f'loading {file_path} -> {target_path}'):
         shutil.copy(file_path, target_path)
+        os.chmod(target_path,777)
     
     return target_path
 
@@ -189,6 +190,7 @@ def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
         use_small_bfd=cfg.use_small_bfd,
         use_precomputed_msas=use_precomputed_msas,
         nprocs=cfg.nproc_msa,
+        mem=cfg.mem
         )
 
 
