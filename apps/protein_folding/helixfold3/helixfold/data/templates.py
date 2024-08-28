@@ -909,7 +909,8 @@ class TemplateHitFeaturizer(abc.ABC):
       query_sequence: str,
       query_pdb_code: Optional[str],
       query_release_date: Optional[datetime.datetime],
-      hits: Sequence[parsers.TemplateHit]) -> TemplateSearchResult:
+      hits: Sequence[parsers.TemplateHit],
+      nproc: int) -> TemplateSearchResult:
     """Computes the templates for given query sequence."""
 
 
@@ -962,10 +963,11 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
       batch_results: Tuple[SingleHitResult]=Parallel(n_jobs=nproc,verbose=False)(
         delayed(
           _process_single_hit,
-        )(hit=hit,
-          query_sequence=query_sequence,
+        )(query_sequence=query_sequence,
+          query_pdb_code=query_pdb_code,
+          hit=hit,
           mmcif_dir=self._mmcif_dir,
-          max_template_date=self._max_template_date,
+          max_template_date=template_cutoff_date,
           release_dates=self._release_dates,
           obsolete_pdbs=self._obsolete_pdbs,
           strict_error_check=self._strict_error_check,

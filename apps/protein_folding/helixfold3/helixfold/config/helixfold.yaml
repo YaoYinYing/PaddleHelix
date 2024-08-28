@@ -27,7 +27,7 @@ mem:
 nproc_msa: 
   hhblits: 16 # Number of processors used by hhblits
   jackhmmer: 6 # Number of processors used by jackhmmer
-  templates: 16 # Number of processors used by templates searching
+  template_searcher: 16 # Number of processors used by templates searching
 
 # File paths
 
