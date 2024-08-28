@@ -36,6 +36,7 @@ class HHBlits:
                binary_path: str,
                databases: Sequence[str],
                n_cpu: int = 4,
+               maxmem: int =8,
                n_iter: int = 3,
                e_value: float = 0.001,
                maxseq: int = 1_000_000,
@@ -83,6 +84,7 @@ class HHBlits:
         raise ValueError(f'Could not find HHBlits database {database_path}')
 
     self.n_cpu = n_cpu
+    self.maxmem = maxmem
     self.n_iter = n_iter
     self.e_value = e_value
     self.maxseq = maxseq
@@ -107,6 +109,7 @@ class HHBlits:
           self.binary_path,
           '-i', input_fasta_path,
           '-cpu', str(self.n_cpu),
+          '-maxmem', str(self.maxmem),
           '-oa3m', a3m_path,
           '-o', '/dev/null',
           '-n', str(self.n_iter),

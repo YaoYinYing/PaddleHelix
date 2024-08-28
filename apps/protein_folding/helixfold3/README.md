@@ -308,7 +308,7 @@ The descriptions of the above script are as follows:
 * `config-dir` - The directory that contains the alterative configuration file you would like to use.
 * `config-name` - The name of the configuration file you would like to use.
 * `input` - Input data in the form of JSON or directory that contains such JSON file(s). For file input, check content pattern in `./data/demo_*.json` for your reference.
-* `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
+* `output` - Model output path. The output will be in a folder named the same as your input json file under this path.
 * `CONFIG_DIFFS.preset` - Adjusted model config preset name in `./helixfold/model/config.py:CONFIG_DIFFS`. The preset will be updated into final model configuration with `CONFIG_ALLATOM`.
 * `CONFIG_DIFFS.*` - Override model any configuration in `CONFIG_ALLATOM`.
 

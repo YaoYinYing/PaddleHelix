@@ -42,6 +42,7 @@ from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
 from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
+from helixfold.data.tools.utils import timing
 from helixfold.utils.utils import get_custom_amp_list
 from typing import Dict, Mapping
 from helixfold.infer_scripts import feature_processing_aa, preprocess
@@ -124,8 +125,43 @@ def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
 
     raise FileNotFoundError(f"Could not find a proper binary path for {default_binary_name}: {cfg_path}.")
 
+
+
+def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm") -> str:
+    """
+    Copies a file to /dev/shm (RAM-backed filesystem) and returns the path.
+    
+    :param file_path: The path to the large file on the disk.
+    :return: The path to the file in /dev/shm.
+    """
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    
+    # Ensure the RAM disk path exists and is a directory
+    if not os.path.isdir(ramdisk_path):
+        raise NotADirectoryError(f"RAM disk path not found or not a directory: {ramdisk_path}")
+    
+
+    target_path = os.path.join(ramdisk_path, pathlib.Path(file_path).name)
+    with timing(f'loading {file_path} -> {target_path}'):
+        shutil.copy(file_path, target_path)
+        os.chmod(target_path,777)
+    
+    return target_path
+
+
 def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
     use_precomputed_msas = True  # Assuming this is a constant or should be set globally
+    
+
+    if cfg.ramdisk.uniprot:
+        cfg.db.uniprot=load_to_dev_shm(cfg.db.uniprot)
+    
+    if cfg.ramdisk.uniref90:
+        cfg.db.uniref90=load_to_dev_shm(cfg.db.uniref90)
+
+    if cfg.ramdisk.mgnify:
+        cfg.db.mgnify=load_to_dev_shm(cfg.db.mgnify)
 
     template_searcher = hmmsearch.Hmmsearch(
         binary_path=resolve_bin_path(cfg.bin.hmmsearch, 'hmmsearch'),
@@ -154,7 +190,10 @@ def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
         use_small_bfd=cfg.use_small_bfd,
         use_precomputed_msas=use_precomputed_msas,
         nprocs=cfg.nproc_msa,
+        mem=cfg.mem
         )
+
+
 
     prot_data_pipeline = pipeline_multimer.DataPipeline(
         monomer_data_pipeline=monomer_data_pipeline,
@@ -458,6 +497,7 @@ class HelixFold:
     model_config: DictConfig=None
 
     ccd_dict: Mapping=None
+    msa_templ_data_pipeline_dict: Mapping=None
 
     def __post_init__(self) -> None:
 
@@ -515,6 +555,9 @@ class HelixFold:
             else:
                 self.model.helixfold.set_state_dict(pd_params)
 
+        logging.info('Getting MSA/Template Pipelines...')
+        self.msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=self.cfg)
+
         
         if self.cfg.precision == "bf16" and self.cfg.amp_level == "O2":
             raise NotImplementedError("bf16 O2 is not supported yet.")
@@ -531,8 +574,7 @@ class HelixFold:
         init_seed(seed)
 
 
-        logging.info('Getting MSA/Template Pipelines...')
-        msa_templ_data_pipeline_dict = get_msa_templates_pipeline(cfg=self.cfg)
+        
 
         print(f"============ Data Loading ============")
         job_base = pathlib.Path(entity).stem
@@ -549,7 +591,7 @@ class HelixFold:
             feature_dict = feature_processing_aa.process_input_json(
                             all_entitys, 
                             ccd_preprocessed_dict=self.ccd_dict,
-                            msa_templ_data_pipeline_dict=msa_templ_data_pipeline_dict,
+                            msa_templ_data_pipeline_dict=self.msa_templ_data_pipeline_dict,
                             msa_output_dir=msa_output_dir)
 
             # save features
@@ -596,27 +638,43 @@ class HelixFold:
         print(f'============ Inference finished ! ============')
     
 
+    def cleanup_ramdisk(self, ramdisk_path: str = "/dev/shm"):
+        for db_fasta in [db for db in (self.cfg.db.uniprot, self.cfg.db.uniref90, self.cfg.db.mgnify,) if db.startswith(ramdisk_path)]:
+            try:
+                os.unlink(db_fasta)
+            except Exception as e:
+                logging.error(f"Failed to delete {db_fasta} from ram disk. Reason: {e}")
+            
 
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
 def main(cfg: DictConfig):
     
     hf_runner=HelixFold(cfg=cfg)
 
-    if os.path.isfile(cfg.input):
-        logging.info(f'Starting inference on {cfg.input}')
-        hf_runner.fold(cfg.input)
-        return
-    elif os.path.isdir(cfg.input):
-        logging.info(f'Starting inference on all files in {cfg.input}')
-        for f in [i for i in os.listdir(cfg.input) if any(i.endswith(p) for p in ['json', 'jsonl', 'json.gz', 'jsonl.gz'])]:
-            logging.info(f'Processing  {f}')
-            try:
-                hf_runner.fold(os.path.join(cfg.input,f))
-            except (ValueError, AssertionError, RuntimeError, FileNotFoundError, MemoryError) as e :
-                logging.error(f'Error processing {f}: {e}')
-                continue
+    try:
 
-        return
+        if os.path.isfile(cfg.input):
+            logging.info(f'Starting inference on {cfg.input}')
+            hf_runner.fold(cfg.input)
+            return 
+        elif os.path.isdir(cfg.input):
+            logging.info(f'Starting inference on all files in {cfg.input}')
+            for f in [i for i in os.listdir(cfg.input) if any(i.endswith(p) for p in ['json', 'jsonl', 'json.gz', 'jsonl.gz'])]:
+                logging.info(f'Processing  {f}')
+                try:
+                    hf_runner.fold(os.path.join(cfg.input,f))
+                except (ValueError, AssertionError, RuntimeError, FileNotFoundError, MemoryError) as e :
+                    logging.error(f'Error processing {f}: {e}')
+                    continue
+
+    
+    except Exception as e:
+        logging.error(f'Error processing {cfg.input}: {e}')
+
+    finally:
+        hf_runner.cleanup_ramdisk()
+    
+
 
     raise ValueError(f'Invalid input file/dir: {cfg.input}')
 

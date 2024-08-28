@@ -152,10 +152,14 @@ class DataPipeline:
                nprocs: Mapping[str, int] = {
                   'hhblits': 16,
                   'jackhmmer': 8,
+               },
+               mem: Mapping[str, int] = {
+                  'hhblits': 8,
                }):
     """Initializes the data pipeline. Constructs a feature dict for a given FASTA file."""
     self._use_small_bfd = use_small_bfd
     self.nprocs=nprocs
+    self.mem = mem
     self.jackhmmer_uniref90_runner = jackhmmer.Jackhmmer(
         binary_path=jackhmmer_binary_path,
         database_path=uniref90_database_path, n_cpu=self.nprocs.get('jackhmmer', 8))
@@ -166,7 +170,7 @@ class DataPipeline:
     else:
       self.bfd_runner = hhblits.HHBlits(
           binary_path=hhblits_binary_path,
-          databases=[bfd_database_path, uniclust30_database_path], n_cpu=self.nprocs.get('hhblits', 8))
+          databases=[bfd_database_path, uniclust30_database_path], n_cpu=self.nprocs.get('hhblits', 8), maxmem=self.mem.get('hhblits', 8))
     self.jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
         binary_path=jackhmmer_binary_path,
         database_path=mgnify_database_path, n_cpu=self.nprocs.get('jackhmmer', 8))
