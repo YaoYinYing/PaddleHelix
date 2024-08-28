@@ -20,7 +20,7 @@ nproc_msa:
 
 # File paths
 
-input: null  # Corresponds to --input_json, required field
+input: null  # Input file/Directory, required field. If it's a directory, run HF3 against all files under input directory.
 output: null  # Corresponds to --output_dir, required field
 override: false # Set true to override existing msa output directory
 
