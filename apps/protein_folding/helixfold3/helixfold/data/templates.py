@@ -28,7 +28,10 @@ from helixfold.common import residue_constants
 from helixfold.data import mmcif_parsing
 from helixfold.data import parsers
 from helixfold.data.tools import kalign
+from helixfold.data.tools import utils
 import numpy as np
+from joblib import Parallel,delayed
+
 
 
 class Error(Exception):
@@ -906,7 +909,8 @@ class TemplateHitFeaturizer(abc.ABC):
       query_sequence: str,
       query_pdb_code: Optional[str],
       query_release_date: Optional[datetime.datetime],
-      hits: Sequence[parsers.TemplateHit]) -> TemplateSearchResult:
+      hits: Sequence[parsers.TemplateHit],
+      nproc: int) -> TemplateSearchResult:
     """Computes the templates for given query sequence."""
 
 
@@ -918,7 +922,8 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
       query_sequence: str,
       query_pdb_code: Optional[str],
       query_release_date: Optional[datetime.datetime],
-      hits: Sequence[parsers.TemplateHit]) -> TemplateSearchResult:
+      hits: Sequence[parsers.TemplateHit],
+      nproc: int=os.cpu_count()) -> TemplateSearchResult:
     """Computes the templates for given query sequence (more details above)."""
     logging.info('Searching for template for: %s', query_sequence)
 
@@ -936,6 +941,7 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
       assert template_cutoff_date < query_release_date
     assert template_cutoff_date <= self._max_template_date
 
+
     already_seen = set()
     errors = []
     warnings = []
@@ -945,13 +951,19 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
     else:
       sorted_hits = sorted(hits, key=lambda x: x.sum_probs, reverse=True)
 
-    for hit in sorted_hits:
+
+    # use max_hit as batch size
+    for batch_hits in utils.minibatches(inputs_data=sorted_hits,batch_size=self._max_hits):
+      # Early break if we got all the templates we wanted.
       # We got all the templates we wanted, stop processing hits.
       if len(already_seen) >= self._max_hits:
         break
 
-      result = _process_single_hit(
-          query_sequence=query_sequence,
+      # run kalign in parallel manner.
+      batch_results: Tuple[SingleHitResult]=Parallel(n_jobs=nproc,verbose=False)(
+        delayed(
+          _process_single_hit,
+        )(query_sequence=query_sequence,
           query_pdb_code=query_pdb_code,
           hit=hit,
           mmcif_dir=self._mmcif_dir,
@@ -959,27 +971,34 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
           release_dates=self._release_dates,
           obsolete_pdbs=self._obsolete_pdbs,
           strict_error_check=self._strict_error_check,
-          kalign_binary_path=self._kalign_binary_path)
+          kalign_binary_path=self._kalign_binary_path) for hit in batch_hits)
+      
 
-      if result.error:
-        errors.append(result.error)
+      for i,result in enumerate(batch_results):
+        hit=batch_hits[i]
+        # We got all the templates we wanted, stop processing hits.
+        if len(already_seen) >= self._max_hits:
+          break
 
-      # There could be an error even if there are some results, e.g. thrown by
-      # other unparsable chains in the same mmCIF file.
-      if result.warning:
-        warnings.append(result.warning)
+        if result.error:
+          errors.append(result.error)
 
-      if result.features is None:
-        logging.debug('Skipped invalid hit %s, error: %s, warning: %s',
-                      hit.name, result.error, result.warning)
-      else:
-        already_seen_key = result.features['template_sequence']
-        if already_seen_key in already_seen:
-          continue
-        # Increment the hit counter, since we got features out of this hit.
-        already_seen.add(already_seen_key)
-        for k in template_features:
-          template_features[k].append(result.features[k])
+        # There could be an error even if there are some results, e.g. thrown by
+        # other unparsable chains in the same mmCIF file.
+        if result.warning:
+          warnings.append(result.warning)
+
+        if result.features is None:
+          logging.debug('Skipped invalid hit %s, error: %s, warning: %s',
+                        hit.name, result.error, result.warning)
+        else:
+          already_seen_key = result.features['template_sequence']
+          if already_seen_key in already_seen:
+            continue
+          # Increment the hit counter, since we got features out of this hit.
+          already_seen.add(already_seen_key)
+          for k in template_features:
+            template_features[k].append(result.features[k])
 
     if already_seen:
       for name in template_features:
@@ -996,8 +1015,8 @@ class HmmsearchHitFeaturizer(TemplateHitFeaturizer):
               (1, num_res, residue_constants.atom_type_num), np.float32),
           'template_all_atom_positions': np.zeros(
               (1, num_res, residue_constants.atom_type_num, 3), np.float32),
-          'template_domain_names': np.array([''.encode()], dtype=np.object),
-          'template_sequence': np.array([''.encode()], dtype=np.object),
+          'template_domain_names': np.array([''.encode()], dtype=object),
+          'template_sequence': np.array([''.encode()], dtype=object),
           'template_sum_probs': np.array([0], dtype=np.float32)
       }
     return TemplateSearchResult(

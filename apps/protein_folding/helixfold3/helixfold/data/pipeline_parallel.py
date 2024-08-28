@@ -152,6 +152,7 @@ class DataPipeline:
                nprocs: Mapping[str, int] = {
                   'hhblits': 16,
                   'jackhmmer': 8,
+                  'template_searcher': 16,
                },
                mem: Mapping[str, int] = {
                   'hhblits': 8,
@@ -283,7 +284,9 @@ class DataPipeline:
         query_sequence=input_sequence,
         hits=pdb_template_hits,
         query_pdb_code=None,
-        query_release_date=None)
+        query_release_date=None,
+        nproc=self.nprocs.get('template_searcher', 8)
+    )
 
     sequence_features = make_sequence_features(
         sequence=input_sequence,

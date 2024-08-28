@@ -127,7 +127,7 @@ def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
 
 
 
-def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm") -> str:
+def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm", keep:bool=False) -> str:
     """
     Copies a file to /dev/shm (RAM-backed filesystem) and returns the path.
     
@@ -140,9 +140,15 @@ def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm") -> str:
     # Ensure the RAM disk path exists and is a directory
     if not os.path.isdir(ramdisk_path):
         raise NotADirectoryError(f"RAM disk path not found or not a directory: {ramdisk_path}")
+
     
 
     target_path = os.path.join(ramdisk_path, pathlib.Path(file_path).name)
+
+    if os.path.isfile(target_path) and keep:
+        logging.info(f"File already exists in RAM disk: {target_path}")
+        return target_path
+
     with timing(f'loading {file_path} -> {target_path}'):
         shutil.copy(file_path, target_path)
         os.chmod(target_path,777)
@@ -155,13 +161,13 @@ def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
     
 
     if cfg.ramdisk.uniprot:
-        cfg.db.uniprot=load_to_dev_shm(cfg.db.uniprot)
+        cfg.db.uniprot=load_to_dev_shm(cfg.db.uniprot,keep=cfg.ramdisk.keep)
     
     if cfg.ramdisk.uniref90:
-        cfg.db.uniref90=load_to_dev_shm(cfg.db.uniref90)
+        cfg.db.uniref90=load_to_dev_shm(cfg.db.uniref90,keep=cfg.ramdisk.keep)
 
     if cfg.ramdisk.mgnify:
-        cfg.db.mgnify=load_to_dev_shm(cfg.db.mgnify)
+        cfg.db.mgnify=load_to_dev_shm(cfg.db.mgnify,keep=cfg.ramdisk.keep)
 
     template_searcher = hmmsearch.Hmmsearch(
         binary_path=resolve_bin_path(cfg.bin.hmmsearch, 'hmmsearch'),
@@ -639,6 +645,10 @@ class HelixFold:
     
 
     def cleanup_ramdisk(self, ramdisk_path: str = "/dev/shm"):
+        if self.cfg.ramdisk.keep:
+            logging.info('Keep DB in RAM disk.')
+            return
+        logging.warning('Removing all DBs from RAM disk ....')
         for db_fasta in [db for db in (self.cfg.db.uniprot, self.cfg.db.uniref90, self.cfg.db.mgnify,) if db.startswith(ramdisk_path)]:
             try:
                 os.unlink(db_fasta)
