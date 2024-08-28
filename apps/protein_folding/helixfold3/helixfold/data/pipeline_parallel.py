@@ -152,6 +152,7 @@ class DataPipeline:
                nprocs: Mapping[str, int] = {
                   'hhblits': 16,
                   'jackhmmer': 8,
+                  'templates': 16,
                },
                mem: Mapping[str, int] = {
                   'hhblits': 8,

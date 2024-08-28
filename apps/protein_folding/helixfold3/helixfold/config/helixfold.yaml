@@ -13,10 +13,13 @@ infer_times: 1  # Corresponds to --infer_times
 diff_batch_size: -1  # Corresponds to --diff_batch_size
 use_small_bfd: false # Corresponds to --use_small_bfd
 msa_only: false # Only process msa
+
+
 ramdisk:  # Force to load database to ram disk
   uniprot: false # 111 GB
   uniref90: false # 67 GB
   mgnify: false # 64 GB
+  keep: true # Always keep database in memory
 
 mem:
   hhblits: 64 # in GB
@@ -24,6 +27,7 @@ mem:
 nproc_msa: 
   hhblits: 16 # Number of processors used by hhblits
   jackhmmer: 6 # Number of processors used by jackhmmer
+  templates: 16 # Number of processors used by templates searching
 
 # File paths
 
