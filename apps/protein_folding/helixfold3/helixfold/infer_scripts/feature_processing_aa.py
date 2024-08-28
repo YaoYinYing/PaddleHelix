@@ -369,12 +369,10 @@ def process_chain_msa(args: tuple[pipeline_multimer_parallel.DataPipeline, str, 
     return chain_id, raw_features, desc, seq
 
 
-def process_input_json(all_entitys: List[Entity], ccd_preprocessed_path, 
+def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict, 
                           msa_templ_data_pipeline_dict, msa_output_dir,
                           no_msa_templ_feats=False):
 
-    ## load ccd dict.
-    ccd_preprocessed_dict = pipeline_conf_bonds.load_ccd_dict(ccd_preprocessed_path)
     all_chain_features = {}
     sequence_features = {} 
     num_chains = 0

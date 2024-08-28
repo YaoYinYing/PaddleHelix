@@ -307,7 +307,7 @@ The descriptions of the above script are as follows:
 * `LD_LIBRARY_PATH` - This is required to load the `libcudnn.so` library if you encounter issue like `RuntimeError: (PreconditionNotMet) Cannot load cudnn shared library. Cannot invoke method cudnnGetVersion.`
 * `config-dir` - The directory that contains the alterative configuration file you would like to use.
 * `config-name` - The name of the configuration file you would like to use.
-* `input` - Input data in the form of JSON. Input pattern in `./data/demo_*.json` for your reference.
+* `input` - Input data in the form of JSON or directory that contains such JSON file(s). For file input, check content pattern in `./data/demo_*.json` for your reference.
 * `output` - Model output path. The output will be in a folder named the same as your `--input_json` under this path.
 * `CONFIG_DIFFS.preset` - Adjusted model config preset name in `./helixfold/model/config.py:CONFIG_DIFFS`. The preset will be updated into final model configuration with `CONFIG_ALLATOM`.
 * `CONFIG_DIFFS.*` - Override model any configuration in `CONFIG_ALLATOM`.
