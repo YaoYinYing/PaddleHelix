@@ -78,7 +78,7 @@ its `README` to complete installation. If you encouter error like your GCC versi
 In order to run HelixFold3, the genetic databases and model parameters are required.
 
 The parameters of HelixFold3 can be downloaded [here](https://paddlehelix.bd.bcebos.com/HelixFold3/params/HelixFold3-params-240814.zip), 
-please place the downloaded checkpoint path in `weight_path` of `helixfold/config/helixfold.yaml` configuration file before install HF3 as a python module.
+please place the downloaded checkpoint in ```./init_models/ ```directory.
 
 The script `scripts/download_all_data.sh` can be used to download and set up all genetic databases with the following configs:
 
@@ -222,7 +222,6 @@ CUDA_VISIBLE_DEVICES=0 "$PYTHON_BIN" inference.py \
     --infer_times 3 \
     --precision "fp32"
 ```
-
 The descriptions of the above script are as follows:
 * Replace `MAXIT_SRC` with your installed `maxit`'s root path.
 * Replace `DATA_DIR` with your downloaded data path.
@@ -283,7 +282,8 @@ We suggest a single GPU for inference has at least 32G available memory. The max
 single V100-32G with precision `fp32` is up to 1000. Inferring longer tokens or entities with larger atom numbers 
 per token than normal protein residues like nucleic acids may cost more GPU memory.
 
-For samples with larger tokens, you can override `model.global_config.subbatch_size` in `CONFIG_ALLATOM` by using `+CONFIG_DIFFS.model.global_config.subbatch_size=X` on command runs, where `X` is a smaller number than `96`, to save more GPU memory although this will cause a slower inference. Additionally, you can reduce the number of additional recycles by setting `+CONFIG_DIFFS.model.num_recycle=Y`, where `Y` is a smaller number than `3`.
+For samples with larger tokens, you can reduce `model.global_config.subbatch_size` in `CONFIG_DIFFS` in `helixfold/model/config.py` to save more GPU memory but suffer from slower inference. `model.global_config.subbatch_size` is set as `96` by default. You can also
+reduce the number of additional recycles by changing `model.num_recycle` in the same place.
 
 
 We are keen on support longer token inference, it will come in soon.
