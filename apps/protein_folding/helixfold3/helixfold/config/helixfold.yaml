@@ -22,7 +22,7 @@ ramdisk:  # Force to load database to ram disk
   keep: true # Always keep database in memory
 
 mem:
-  hhblits: 64 # in GB
+  hhblits: 64 # in GB, default is 3
 
 nproc_msa: 
   hhblits: 16 # Number of processors used by hhblits
