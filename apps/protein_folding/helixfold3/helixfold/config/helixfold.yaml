@@ -34,7 +34,7 @@ nproc_msa:
 input: null  # Input file/Directory, required field. If it's a directory, run HF3 against all files under input directory.
 output: null  # Corresponds to --output_dir, required field
 override: false # Set true to override existing msa output directory
-
+ 
 
 # Binary tool paths, leave them as null to find proper ones under PATH or conda bin path
 bin:

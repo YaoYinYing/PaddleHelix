@@ -15,8 +15,7 @@
 """Model config."""
 
 import copy
-from typing import Any, Union
-from omegaconf import DictConfig
+import ml_collections
 
 
 NUM_RES = 'num residues placeholder'
@@ -24,48 +23,27 @@ NUM_MSA_SEQ = 'msa placeholder'
 NUM_EXTRA_SEQ = 'extra msa placeholder'
 NUM_TEMPLATES = 'num templates placeholder'
 
-
-def model_config(config_diffs: Union[str, DictConfig, dict[str, dict[str, Any]]]) -> DictConfig:
+def model_config(name: str) -> ml_collections.ConfigDict:
   """Get the ConfigDict of a model."""
 
   cfg = copy.deepcopy(CONFIG_ALLATOM)
-  if config_diffs is None or config_diffs=='':
-    # early return if nothing is changed
-    return cfg
+  if name in CONFIG_DIFFS:
+    cfg.update_from_flattened_dict(CONFIG_DIFFS[name])
 
-  if isinstance(config_diffs, DictConfig):
-    if 'preset' in config_diffs and (preset_name:=config_diffs['preset']) in CONFIG_DIFFS:
-      updated_config=CONFIG_DIFFS[preset_name]
-      cfg.merge_with_dotlist(updated_config)
-      print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
-
-    
-    # update from detailed configuration
-    if any(root_kw in config_diffs for root_kw in CONFIG_ALLATOM):
-
-      for root_kw in CONFIG_ALLATOM:
-        if root_kw not in config_diffs:
-          continue
-        cfg.merge_with(DictConfig({root_kw:config_diffs[root_kw]})) # merge to override
-        print(f'Updated config from `CONFIG_DIFFS`:{root_kw}: {config_diffs[root_kw]}')
-    
-    return cfg
-  
-  raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
-    
+  return cfg
 
 # preset for runs
-CONFIG_DIFFS: dict[str, list[str]] = {
-    'allatom_demo': [
-      'model.heads.confidence_head.weight=0.01'
-      ],
-    'allatom_subbatch_64_recycle_1': [
-        'model.global_config.subbatch_size=64',
-        'model.num_recycle=1',
-    ]
+CONFIG_DIFFS = {
+    'allatom_demo': {
+        'model.heads.confidence_head.weight': 0.01
+    },
+    'allatom_subbatch_64_recycle_1': {
+        'model.global_config.subbatch_size': 64,
+        'model.num_recycle': 1,
+    },
 }
 
-CONFIG_ALLATOM = DictConfig({
+CONFIG_ALLATOM = ml_collections.ConfigDict({
   'data': {   
     'num_blocks': 5,    # for msa block deletion
     'randomize_num_blocks': True,

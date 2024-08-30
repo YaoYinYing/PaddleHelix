@@ -18,6 +18,7 @@ import re
 import os
 import copy
 import random
+import ml_collections
 import paddle
 import json
 import pickle
@@ -42,11 +43,12 @@ from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
 from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
+from helixfold.model.config import CONFIG_ALLATOM, CONFIG_DIFFS
 from helixfold.data.tools.utils import timing
 from helixfold.utils.utils import get_custom_amp_list
-from typing import Dict, Mapping
-from helixfold.infer_scripts import feature_processing_aa, preprocess
-from helixfold.infer_scripts.tools import mmcif_writer
+from typing import Any, Dict, Mapping, Union
+from helixfold.utils import feature_processing_aa, preprocess
+from helixfold.utils import mmcif_writer
 
 
 script_path=os.path.dirname(__file__)
@@ -126,6 +128,40 @@ def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
     raise FileNotFoundError(f"Could not find a proper binary path for {default_binary_name}: {cfg_path}.")
 
 
+# inference only, with hydra and omegaconf
+def update_model_config(config_diffs: Union[str, DictConfig, ml_collections.ConfigDict, Mapping[str, dict[str, Any]]]) -> DictConfig:
+  """Get the ConfigDict of a model."""
+
+  if hasattr(config.CONFIG_ALLATOM, 'to_dict'): # ml_collections.ConfigDict to DictConfig
+    cfg_aa=CONFIG_ALLATOM.to_dict()
+  else:
+    cfg_aa=CONFIG_ALLATOM
+
+  cfg = copy.deepcopy(DictConfig(cfg_aa))
+  if config_diffs is None or config_diffs=='':
+    # early return if nothing is changed
+    return cfg
+
+  if isinstance(config_diffs, DictConfig):
+    if 'preset' in config_diffs and (preset_name:=config_diffs['preset']) in CONFIG_DIFFS:
+      CONFIG_DIFFS_DOTLIST={k:[f'{i}={j}' for i, j in v.items()] for k,v in CONFIG_DIFFS.items()}
+      updated_config=CONFIG_DIFFS_DOTLIST[preset_name]
+      cfg.merge_with_dotlist(updated_config)
+      print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
+
+    # update from detailed configuration
+    if any(root_kw in config_diffs for root_kw in CONFIG_ALLATOM):
+
+      for root_kw in CONFIG_ALLATOM:
+        if root_kw not in config_diffs:
+          continue
+        cfg.merge_with(DictConfig({root_kw:config_diffs[root_kw]})) # merge to override
+        print(f'Updated config from `CONFIG_DIFFS`:{root_kw}: {config_diffs[root_kw]}')
+    
+    return cfg
+  
+  raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
+    
 
 def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm", keep:bool=False) -> str:
     """
@@ -495,7 +531,7 @@ def split_prediction(pred, rank):
     return prediction
 
 @dataclass
-class HelixFold:
+class HelixFoldRunner:
 
     cfg: DictConfig
 
@@ -546,7 +582,7 @@ class HelixFold:
             assert self.cfg.db.uniclust30 is not None
 
         ### Create model
-        self.model_config = config.model_config(self.cfg.CONFIG_DIFFS)
+        self.model_config = update_model_config(self.cfg.CONFIG_DIFFS)
         logging.warning(f'>>> Model config: \n{self.model_config}\n\n')
 
         self.model = RunModel(self.model_config)
@@ -580,11 +616,16 @@ class HelixFold:
         init_seed(seed)
 
 
-        
-
         print(f"============ Data Loading ============")
         job_base = pathlib.Path(entity).stem
         output_dir_base = pathlib.Path(self.cfg.output).joinpath(job_base)
+
+        expected_res=os.path.join(self.cfg.output, job_base, f'{job_base}-rank1','all_results.json')
+        if os.path.isfile(expected_res):
+            logging.warning(f'Skip {job_base} because {expected_res} exists')
+            return
+
+
         msa_output_dir = output_dir_base.joinpath('msas')
         msa_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -659,45 +700,66 @@ class HelixFold:
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
 def main(cfg: DictConfig):
     
-    hf_runner=HelixFold(cfg=cfg)
+    hf_runner=HelixFoldRunner(cfg=cfg)
 
-    try:
 
-        if os.path.isfile(cfg.input):
-            logging.info(f'Starting inference on {cfg.input}')
+
+    if os.path.isfile(cfg.input):
+        logging.info(f'Starting inference on {cfg.input}')
+        try:
             hf_runner.fold(cfg.input)
-            return 
-        elif os.path.isdir(cfg.input):
-            logging.info(f'Starting inference on all files in {cfg.input}')
-            for f in [i for i in os.listdir(cfg.input) if any(i.endswith(p) for p in ['json', 'jsonl', 'json.gz', 'jsonl.gz'])]:
-                logging.info(f'Processing  {f}')
-                try:
-                    hf_runner.fold(os.path.join(cfg.input,f))
-                except (ValueError, AssertionError, RuntimeError, FileNotFoundError, MemoryError) as e :
-                    logging.error(f'Error processing {f}: {e}')
-                    continue
+        except (ValueError, AssertionError, RuntimeError, FileNotFoundError, MemoryError) as e :
+            logging.error(f'Error processing {cfg.input}: {e}')
+    elif os.path.isdir(cfg.input):
+        logging.info(f'Starting inference on all files in {cfg.input}')
+        for f in [i for i in os.listdir(cfg.input) if any(i.endswith(p) for p in ['json', 'jsonl', 'json.gz', 'jsonl.gz'])]:
+            logging.info(f'Processing  {f}')
+            try:
+                hf_runner.fold(os.path.join(cfg.input,f))
+            except (ValueError, AssertionError, RuntimeError, FileNotFoundError, MemoryError, OSError) as e :
+                logging.error(f'Error processing {f}: {e}')
+                continue
 
+
+    return hf_runner.cleanup_ramdisk()
     
-    except Exception as e:
-        logging.error(f'Error processing {cfg.input}: {e}')
-
-    finally:
-        hf_runner.cleanup_ramdisk()
-    
-
-
-    raise ValueError(f'Invalid input file/dir: {cfg.input}')
 
 
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
-def show_atom_id_ccd(cfg: DictConfig):
-    
+def check_ligand(cfg: DictConfig):
+    from helixfold.utils.preprocess import ligand_convert
+    ## check obabel
+    obabel_bin=resolve_bin_path(cfg.bin.obabel,'obabel')
+    os.environ['OBABEL_BIN']=obabel_bin
     ccd_preprocessed_path = cfg.db.ccd_preprocessed
+    ccd_dict=load_ccd_dict(ccd_preprocessed_path)
 
-    ccd_id=cfg.ccd_id
-    if len(ccd_id) <= 3 and ccd_id in (ccd_dict:=load_ccd_dict(ccd_preprocessed_path)):
-        logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
-        return
+
+    sm_ligand_fp: Union[list[str], str]=cfg.ligand
+    if isinstance(sm_ligand_fp, str):
+        sm_ligand_fp=[sm_ligand_fp]
+
+    for sm in sm_ligand_fp:
+
+        if len(sm) <= 3: 
+            ccd_id=sm
+            if ccd_id in ccd_dict:
+                logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
+                continue
+            else:
+                raise KeyError(f'Failed to load CCD key `{sm}` from CCD dict.')
+        
+
+        ligand_type='smiles' if not os.path.isfile(sm) else os.path.basename(sm).split('.')[-1]
+
+        logging.info(f'Guessed ligand input type: {ligand_type}')
+        ligand_entity=ligand_convert(items={
+            'type':'ligand',
+            ligand_type: sm,
+            'count': 1
+        })
+
+        logging.info(f'Atoms in {sm} ({ligand_type}): {ligand_entity.extra_mol_infos}')
 
 
 if __name__ == '__main__':
