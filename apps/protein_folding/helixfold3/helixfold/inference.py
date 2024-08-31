@@ -690,14 +690,35 @@ def main(cfg: DictConfig):
 
 
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
-def show_atom_id_ccd(cfg: DictConfig):
-    
-    ccd_preprocessed_path = cfg.db.ccd_preprocessed
+def check_ligand(cfg: DictConfig):
+    ## check obabel
+    obabel_bin=resolve_bin_path(cfg.bin.obabel,'obabel')
+    os.environ['OBABEL_BIN']=obabel_bin
 
-    ccd_id=cfg.ccd_id
-    if len(ccd_id) <= 3 and ccd_id in (ccd_dict:=load_ccd_dict(ccd_preprocessed_path)):
-        logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
-        return
+
+    sm_ligand_fp=cfg.ligand
+
+    if len(sm_ligand_fp) <= 3: 
+        ccd_id=sm_ligand_fp
+        ccd_preprocessed_path = cfg.db.ccd_preprocessed
+        if ccd_id in (ccd_dict:=load_ccd_dict(ccd_preprocessed_path)):
+            logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
+            return
+        raise KeyError('Failed to load CCD key from CCD dict.')
+    
+
+    from helixfold.utils.preprocess import ligand_convert
+
+    ligand_type='smiles' if not os.path.isfile(sm_ligand_fp) else os.path.basename(sm_ligand_fp).split('.')[-1]
+
+    logging.info(f'Guessed ligand input type: {ligand_type}')
+    ligand_entity=ligand_convert(items={
+        'type':'ligand',
+        ligand_type: sm_ligand_fp,
+        'count': 1
+    })
+
+    logging.info(f'Atoms in {sm_ligand_fp} ({ligand_type}): {ligand_entity.extra_mol_infos}')
 
 
 if __name__ == '__main__':
