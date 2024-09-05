@@ -44,7 +44,7 @@ from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
 from helixfold.data.tools.utils import timing
 from helixfold.utils.utils import get_custom_amp_list
-from typing import Dict, Mapping
+from typing import Dict, Mapping, Union
 from helixfold.utils import feature_processing_aa, preprocess
 from helixfold.utils import mmcif_writer
 
@@ -691,34 +691,39 @@ def main(cfg: DictConfig):
 
 @hydra.main(version_base=None, config_path=os.path.join(script_path,'config',),config_name='helixfold')
 def check_ligand(cfg: DictConfig):
+    from helixfold.utils.preprocess import ligand_convert
     ## check obabel
     obabel_bin=resolve_bin_path(cfg.bin.obabel,'obabel')
     os.environ['OBABEL_BIN']=obabel_bin
+    ccd_preprocessed_path = cfg.db.ccd_preprocessed
+    ccd_dict=load_ccd_dict(ccd_preprocessed_path)
 
 
-    sm_ligand_fp=cfg.ligand
+    sm_ligand_fp: Union[list[str], str]=cfg.ligand
+    if isinstance(sm_ligand_fp, str):
+        sm_ligand_fp=[sm_ligand_fp]
 
-    if len(sm_ligand_fp) <= 3: 
-        ccd_id=sm_ligand_fp
-        ccd_preprocessed_path = cfg.db.ccd_preprocessed
-        if ccd_id in (ccd_dict:=load_ccd_dict(ccd_preprocessed_path)):
-            logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
-            return
-        raise KeyError('Failed to load CCD key from CCD dict.')
-    
+    for sm in sm_ligand_fp:
 
-    from helixfold.utils.preprocess import ligand_convert
+        if len(sm) <= 3: 
+            ccd_id=sm
+            if ccd_id in ccd_dict:
+                logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
+                continue
+            else:
+                raise KeyError(f'Failed to load CCD key `{sm}` from CCD dict.')
+        
 
-    ligand_type='smiles' if not os.path.isfile(sm_ligand_fp) else os.path.basename(sm_ligand_fp).split('.')[-1]
+        ligand_type='smiles' if not os.path.isfile(sm) else os.path.basename(sm).split('.')[-1]
 
-    logging.info(f'Guessed ligand input type: {ligand_type}')
-    ligand_entity=ligand_convert(items={
-        'type':'ligand',
-        ligand_type: sm_ligand_fp,
-        'count': 1
-    })
+        logging.info(f'Guessed ligand input type: {ligand_type}')
+        ligand_entity=ligand_convert(items={
+            'type':'ligand',
+            ligand_type: sm,
+            'count': 1
+        })
 
-    logging.info(f'Atoms in {sm_ligand_fp} ({ligand_type}): {ligand_entity.extra_mol_infos}')
+        logging.info(f'Atoms in {sm} ({ligand_type}): {ligand_entity.extra_mol_infos}')
 
 
 if __name__ == '__main__':
