@@ -18,6 +18,7 @@ import re
 import os
 import copy
 import random
+import ml_collections
 import paddle
 import json
 import pickle
@@ -42,9 +43,10 @@ from helixfold.data.utils import atom_level_keys, map_to_continuous_indices
 from helixfold.utils.model import RunModel
 from helixfold.data.tools import hmmsearch
 from helixfold.data import templates
+from helixfold.model.config import CONFIG_ALLATOM, CONFIG_DIFFS
 from helixfold.data.tools.utils import timing
 from helixfold.utils.utils import get_custom_amp_list
-from typing import Dict, Mapping, Union
+from typing import Any, Dict, Mapping, Union
 from helixfold.utils import feature_processing_aa, preprocess
 from helixfold.utils import mmcif_writer
 
@@ -126,6 +128,40 @@ def resolve_bin_path(cfg_path: str, default_binary_name: str)-> str:
     raise FileNotFoundError(f"Could not find a proper binary path for {default_binary_name}: {cfg_path}.")
 
 
+# inference only, with hydra and omegaconf
+def update_model_config(config_diffs: Union[str, DictConfig, ml_collections.ConfigDict, Mapping[str, dict[str, Any]]]) -> DictConfig:
+  """Get the ConfigDict of a model."""
+
+  if hasattr(config.CONFIG_ALLATOM, 'to_dict'): # ml_collections.ConfigDict to DictConfig
+    cfg_aa=CONFIG_ALLATOM.to_dict()
+  else:
+    cfg_aa=CONFIG_ALLATOM
+
+  cfg = copy.deepcopy(DictConfig(cfg_aa))
+  if config_diffs is None or config_diffs=='':
+    # early return if nothing is changed
+    return cfg
+
+  if isinstance(config_diffs, DictConfig):
+    if 'preset' in config_diffs and (preset_name:=config_diffs['preset']) in CONFIG_DIFFS:
+      CONFIG_DIFFS_DOTLIST={k:[f'{i}={j}' for i, j in v.items()] for k,v in CONFIG_DIFFS.items()}
+      updated_config=CONFIG_DIFFS_DOTLIST[preset_name]
+      cfg.merge_with_dotlist(updated_config)
+      print(f'Updated config from `CONFIG_DIFFS.{preset_name}`: {updated_config}')
+
+    # update from detailed configuration
+    if any(root_kw in config_diffs for root_kw in CONFIG_ALLATOM):
+
+      for root_kw in CONFIG_ALLATOM:
+        if root_kw not in config_diffs:
+          continue
+        cfg.merge_with(DictConfig({root_kw:config_diffs[root_kw]})) # merge to override
+        print(f'Updated config from `CONFIG_DIFFS`:{root_kw}: {config_diffs[root_kw]}')
+    
+    return cfg
+  
+  raise ValueError(f'Invalid config_diffs ({type(config_diffs)}): {config_diffs}')
+    
 
 def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm", keep:bool=False) -> str:
     """
@@ -546,7 +582,7 @@ class HelixFoldRunner:
             assert self.cfg.db.uniclust30 is not None
 
         ### Create model
-        self.model_config = config.model_config(self.cfg.CONFIG_DIFFS)
+        self.model_config = update_model_config(self.cfg.CONFIG_DIFFS)
         logging.warning(f'>>> Model config: \n{self.model_config}\n\n')
 
         self.model = RunModel(self.model_config)
