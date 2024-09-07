@@ -167,7 +167,7 @@ Another example of **covalently modified** input:
 }
 ```
 
-Example input of residue replacements:
+Example input of residue replacements(experimental feature):
 
 ```json
 {

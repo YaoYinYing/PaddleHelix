@@ -21,7 +21,7 @@
             "type": "bond",
             "bond": "A,CYS,445,SG,B,hem,1,Fe1,covale,2.3",
             "_comment": "<chain-id>,<residue name>,<residue index>,<atom id>,<chain-id>,<residue name>,<residue index>,<atom id>,<bond type>,<bond length>",
-            "_also_comment": "For ccd input, use CCD key as residue name; for smiles and file input, use `UNK-<index>` where index is the chain order you input"
+            "_also_comment": "For ccd input, use CCD key as residue name; for smiles and file input, use `name` identifier you input with this ligand residue"
         }
     ]
 }

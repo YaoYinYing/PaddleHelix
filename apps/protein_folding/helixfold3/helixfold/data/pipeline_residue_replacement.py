@@ -15,6 +15,10 @@ class ResidueReplacement:
             raise ValueError(f'Invalid old residue: {self.old_residue}')
         if len(self.new_residue) >3:
             raise ValueError("New residue should be 1 - 3 letters")
+        
+
+    def __str__(self) -> str:
+        return f'Chain {self.chain}: ({self.residue_index}) | {self.old_residue} -> {self.new_residue} '
 
 
 def parse_residue_replacement(modres:str):

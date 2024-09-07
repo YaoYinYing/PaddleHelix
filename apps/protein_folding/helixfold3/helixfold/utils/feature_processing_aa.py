@@ -402,6 +402,8 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
         chain_modres=[m for m in all_modres if m.chain==chain_id]
         if chain_modres:
           logging.info(f'{type_chain_id} has {len(chain_modres)} residue to be replaced')
+          for m in chain_modres:
+            logging.info(str(m))
           
           for m in chain_modres:
             if ccd[m.residue_index-1]!=m.old_residue:
