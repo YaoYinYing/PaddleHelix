@@ -1,0 +1,16 @@
+{
+    "entities": [
+        {
+            "type": "protein",
+            "sequence": "MQIFVKTLTGKTITLEVESSDTIDNVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLADYNIQKESTLHLVLRLRGG",
+            "count": 1,
+            "_case_from": "https://www.rcsb.org/structure/5K9P",
+            "_note": "Ub"
+        },
+        {
+            "type": "modres",
+            "modres": "A,20,SER,SEP",
+            "_note": "Ser20 phosphorylated ubiquitin"
+        }
+    ]
+}

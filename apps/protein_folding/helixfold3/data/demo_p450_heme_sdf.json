@@ -13,6 +13,7 @@
         {
             "type": "ligand",
             "sdf": "/mnt/data/yinying/tests/helixfold/ligands/60119277-3d.sdf",
+            "name": "tax",
             "count": 1
         }
     ]

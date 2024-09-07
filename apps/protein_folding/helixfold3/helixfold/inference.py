@@ -277,7 +277,7 @@ def ranking_all_predictions(output_dirs):
         rank_id += 1
 
 @paddle.no_grad()
-def eval(args, model, batch):
+def evaluate(args, model, batch):
     """evaluate a given dataset"""
     model.eval()       
         
@@ -664,7 +664,7 @@ class HelixFoldRunner:
         for infer_id in range(infer_times):
             
             logging.info(f'Start {infer_id}-th inference...\n')
-            prediction = eval(self.cfg, self.model, feature_dict)
+            prediction = evaluate(self.cfg, self.model, feature_dict)
             
             # save result
             prediction = split_prediction(prediction, diff_batch_size)
@@ -744,7 +744,7 @@ def check_ligand(cfg: DictConfig):
         if len(sm) <= 3: 
             ccd_id=sm
             if ccd_id in ccd_dict:
-                logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]["atom_ids"]}')
+                logging.info(f'Atoms in {ccd_id}: {ccd_dict[ccd_id]}')
                 continue
             else:
                 raise KeyError(f'Failed to load CCD key `{sm}` from CCD dict.')
@@ -756,6 +756,7 @@ def check_ligand(cfg: DictConfig):
         ligand_entity=ligand_convert(items={
             'type':'ligand',
             ligand_type: sm,
+            'name': 'UNK',
             'count': 1
         })
 

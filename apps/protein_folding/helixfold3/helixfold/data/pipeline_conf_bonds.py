@@ -85,6 +85,9 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
     bond_strings = input_string.split(';')
 
     for bond_str in bond_strings:
+        if not bond_str:
+           continue
+        
         # Split the individual bond string by commas to separate attributes
         bond_parts = bond_str.split(',')
 
