@@ -31,7 +31,7 @@ ALLOWED_LIGAND_BONDS_TYPE = {
 BondType = Literal["covale", "covale_base", "covale_phosphate", "covale_sugar", "disulf", "hydrog",'metalc','mismat','modres','saltbr']
 
 
-@dataclass
+@dataclass(frozen=True)
 class AtomPartner:
     """
     Represents one partner atom in a covalent bond.
@@ -49,7 +49,7 @@ class AtomPartner:
     label_atom_id: str  # Atom name
 
 
-@dataclass
+@dataclass(frozen=True)
 class CovalentBond:
     """
     Represents a covalent bond between two atoms in a molecular structure.
@@ -65,6 +65,9 @@ class CovalentBond:
     atom_2: AtomPartner
     bond_type: BondType
     pdbx_dist_value: float
+
+    def __str__(self)-> str:
+       return f'Bond [{self.bond_type}]: /{self.atom_1.label_asym_id}/{self.atom_1.seq_id}/{self.atom_1.label_comp_id}/{self.atom_1.label_atom_id} --- /{self.atom_2.label_asym_id}/{self.atom_2.seq_id}/{self.atom_2.label_comp_id}/{self.atom_2.label_atom_id} | {self.pdbx_dist_value}'
 
 def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
     """
@@ -85,6 +88,9 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
     bond_strings = input_string.split(';')
 
     for bond_str in bond_strings:
+        if not bond_str:
+           continue
+        
         # Split the individual bond string by commas to separate attributes
         bond_parts = bond_str.split(',')
 
@@ -116,7 +122,9 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
 
         # Append the CovalentBond instance to the list
         covalent_bonds.append(covalent_bond)
-    logging.info(f"Added {len(covalent_bonds)} bonds: {covalent_bonds}")
+    logging.info(f"Added {len(covalent_bonds)} bonds: ")
+    for b in covalent_bonds:
+       logging.info(str(b))
 
     return covalent_bonds
 

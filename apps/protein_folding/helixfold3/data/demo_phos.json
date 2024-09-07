@@ -7,24 +7,24 @@
             "_case_from": "https://www.uniprot.org/uniprotkb/Q63470/entry#ptm_processing"
         },
         {
-            "type": "ligand",
-            "ccd": "PO2",
-            "count": 16
+            "type": "ncaa",
+            "name": "typ",
+            "mol2": "/repo/PaddleHelix/apps/protein_folding/helixfold3/data/typ.mol2"
         },
         {
-            "type": "bond",
-            "bond": "A,SER,14,OG,B,PO2,1,P,modres,1.66;A,SER,310,OG,C,PO2,1,P,modres,1.66;A,SER,529,OG,D,PO2,1,P,modres,1.66;A,SER,538,OG,E,PO2,1,P,modres,1.66;A,SER,748,OG,F,PO2,1,P,modres,1.66;A,SER,758,OG,G,PO2,1,P,modres,1.66",
+            "type": "modres",
+            "modres": "A,14,SER,SEP;A,310,SER,SEP;A,529,SER,SEP;A,538,SER,SEP;A,748,SER,SEP;A,758,SER,SEP",
             "_note": "all phosphoserines, 14/310/529/538/748/758"
         },
         {
-            "type": "bond",
-            "bond": "A,TYR,111,OH,H,PO2,1,P,modres,1.66;A,TYR,140,OH,I,PO2,1,P,modres,1.66;A,TYR,145,OH,J,PO2,1,P,modres,1.66;A,TYR,159,OH,K,PO2,1,P,modres,1.66;A,TYR,177,OH,L,PO2,1,P,modres,1.66;A,TYR,219,OH,M,PO2,1,P,modres,1.66;A,TYR,319,OH,N,PO2,1,P,modres,1.66;A,TYR,321,OH,O,PO2,1,P,modres,1.66;A,TYR,449,OH,P,PO2,1,P,modres,1.66",
-            "_note": "all phosphotyrosines, 111/140/145/159/177/219/319/321/449"
+            "type": "modres",
+            "modres": "A,402,THR,TPO",
+            "_note": "one phosphothreonine"
         },
         {
-            "type": "bond",
-            "bond": "A,THR,402,OG1,Q,PO2,1,P,modres,1.66",
-            "_note": "one phosphothreonine"
+            "type": "modres",
+            "modres": "A,111,TYR,typ;A,140,TYR,typ;A,145,TYR,typ;A,159,TYR,typ;A,177,TYR,typ;A,219,TYR,typ;A,319,TYR,typ;A,321,TYR,typ;A,449,TYR,typ",
+            "_note": "all phosphotyrosines, 111/140/145/159/177/219/319/321/449"
         }
     ]
 }

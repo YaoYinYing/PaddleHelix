@@ -1,0 +1,26 @@
+{
+    "entities": [
+        {
+            "type": "protein",
+            "sequence": "MQIFVKTLTGKTITLEVESSDTIDNVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLADYNIQKESTLHLVLRLRGG",
+            "count": 1,
+            "_case_from": "https://www.rcsb.org/structure/5K9P",
+            "_note": "Ub"
+        },
+        {
+            "type": "ncaa",
+            "name": "typ",
+            "mol2": "/repo/PaddleHelix/apps/protein_folding/helixfold3/data/typ.mol2"
+        },
+        {
+            "type": "modres",
+            "modres": "A,20,SER,SEP",
+            "_note": "Ser20 phosphorylated ubiquitin"
+        },
+        {
+            "type": "modres",
+            "modres": "A,59,TYR,typ",
+            "_note": "all phosphotyrosines, 59"
+        }
+    ]
+}

@@ -153,6 +153,7 @@ Another example of **covalently modified** input:
         {
             "type": "ligand",
             "smiles": "CC1=C2CC[C@@]3(CCCC(=C)[C@H]3C[C@@H](C2(C)C)CC1)C",
+            "name": "lig", 
             "count": 1
         },
         {
@@ -160,11 +161,34 @@ Another example of **covalently modified** input:
             "bond": "A,CYS,445,SG,B,HEM,1,FE,covale,2.3",
             "_comment": "<chain-id>,<residue name>,<residue index>,<atom id>,<chain-id>,<residue name>,<residue index>,<atom id>,<bond type>,<bond length>",
             "_another_comment": "use semicolon to separate multiple bonds",
-            "_also_comment": "For ccd input, use CCD key as residue name; for smiles and file input, use `UNK-<index>` where index is the chain order you input. eg. `UNK-1` for the first ligand chain(or the count #1), `UNK-2` the second(or the count #2)."
+            "_also_comment": "For ccd input, use CCD key as residue name; for smiles and file input, use `name` identifier"
         }
     ]
 }
 ```
+
+Example input of residue replacements(experimental feature):
+
+```json
+{
+    "entities": [
+        {
+            "type": "protein",
+            "sequence": "MQIFVKTLTGKTITLEVESSDTIDNVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLADYNIQKESTLHLVLRLRGG",
+            "count": 1,
+            "_case_from": "https://www.rcsb.org/structure/5K9P",
+            "_note": "Ub"
+        },
+        {
+            "type": "modres",
+            "modres": "A,20,SER,SEP",
+            "_note": "Ser20 phosphorylated ubiquitin",
+            "_comment": "replace SER on 20 with SEP, phosphoserine"
+        }
+    ]
+}
+```
+
 **The atom ID that bonded in covalent bond input is fatal.**
 For seaking all atom ids in CCD database:
 
@@ -193,6 +217,9 @@ helixfold_check_ligand +ligand=./60119277-3d.sdf
 
 # mol2 file
 helixfold_check_ligand +ligand=./60119277-3d.mol2
+
+# multiple ccd ids:
+helixfold_check_ligand +ligand=[SER,SEP,TYR,TYP,THR,THP]
 ```
 
 HF3 will output like the following:

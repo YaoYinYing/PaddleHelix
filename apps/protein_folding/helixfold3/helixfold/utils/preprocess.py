@@ -17,13 +17,14 @@ import subprocess
 import tempfile
 import itertools
 from absl import logging
-from typing import List, Optional, Tuple, Union, Mapping, Literal, Callable, Any
+from typing import List, Optional, Sequence, Tuple, Union, Mapping, Literal, Callable, Any
 from dataclasses import dataclass, field
 import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from helixfold.common import residue_constants
 from helixfold.data.pipeline_conf_bonds import CovalentBond, parse_covalent_bond_input
+from helixfold.data.pipeline_residue_replacement import ResidueReplacement, parse_residue_replacement
 from helixfold.data.tools import utils
 
 from openbabel import openbabel
@@ -51,7 +52,6 @@ ALLOWED_LIGAND_BONDS_TYPE_MAP = {
 }
 
 USER_LIG_IDS = 'abcdefghijklmnopqrstuvwxyz0123456789'
-USER_LIG_IDS_3 = [''.join(pair) for pair in itertools.product(USER_LIG_IDS, repeat=3)]
 
 ERROR_CODES = {
     1: 'Invalid ligand generate.',
@@ -84,16 +84,21 @@ def digit2alphabet(digit):
     return alphabet
 
 
-def make_basic_info_fromMol(mol: Chem.Mol):
+def make_basic_info_fromMol(mol: Chem.Mol, keep_labels=False):
     ## make basic atom_name to Mol
     _atom_nums_map = collections.defaultdict(int)  # atom_symbol to appear count.
     idx_to_name = {}
     for atom in mol.GetAtoms():
         idx = atom.GetIdx()
-        symbol = atom.GetSymbol()
-        _atom_nums_map[symbol] += 1
-        atom_name = f"{symbol}{_atom_nums_map[symbol]}"
-        atom.SetProp("_TriposAtomName", atom_name)
+        atom_name=atom.GetProp("_TriposAtomName")
+        if keep_labels:
+            logging.debug(f'Keeping atom name as {atom_name}')
+        else:
+            symbol = atom.GetSymbol()
+            _atom_nums_map[symbol] += 1
+            atom_name = f"{symbol}{_atom_nums_map[symbol]}"
+            atom.SetProp("_TriposAtomName", atom_name)
+            logging.debug(f'Rename atom name to {atom_name}')
         idx_to_name[idx] = atom_name
 
     atom_symbol = [atom.GetSymbol() for atom in mol.GetAtoms()]
@@ -208,11 +213,15 @@ class Mol2MolObabel:
 
 @dataclass
 class Entity:
-    dtype: Literal['protein', 'dna', 'rna', 'ligand', 'bond','non_polymer', 'ion']
-    seqs: str
-    msa_seqs: Union[str, List[CovalentBond]] = ''
+    dtype: Literal['protein', 'dna', 'rna', 'ligand', 'bond','non_polymer', 'ion', 'modres', 'ncaa']
+    ccd: list[str] # CCD code sequence in list
+    msa_seqs: Union[str, List[CovalentBond], List[ResidueReplacement]] = ''
     count: int = 1
     extra_mol_infos: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def seqs(self) -> str:
+        return ''.join(f'({_ccd_id})' for _ccd_id in self.ccd)
 
 def polymer_convert(items)-> Entity:
     """
@@ -226,18 +235,19 @@ def polymer_convert(items)-> Entity:
 
     msa_seqs = one_letter_seqs
     ccd_seqs = []
-    for resi_name_1 in one_letter_seqs:
-        if dtype == 'protein':
-            ccd_seqs.append(f"({PROTEIN_1to3_with_x[resi_name_1]})")
-        elif dtype == 'dna':
-            ccd_seqs.append(f"({DNA_1to2_with_x[resi_name_1]})")
-        elif dtype == 'rna':
-            ccd_seqs.append(f"({RNA_1to2_with_x[resi_name_1]})")
-        else:
-            raise ValueError(f'not support for the {dtype} in polymer_convert')
-    ccd_seqs = ''.join(ccd_seqs) ## (GLY)(ALA).....
 
-    return Entity(dtype=dtype, seqs=ccd_seqs, msa_seqs=msa_seqs,count=count)
+    if dtype == 'protein':
+        d=PROTEIN_1to3_with_x
+    elif dtype == 'dna':
+        d=DNA_1to2_with_x
+    elif dtype == 'rna':
+        d=RNA_1to2_with_x
+    else:
+        raise ValueError(f'not support for the {dtype} in polymer_convert')
+    
+    ccd_seqs.extend(d[resi_name_1] for resi_name_1 in one_letter_seqs)
+
+    return Entity(dtype=dtype, ccd=ccd_seqs, msa_seqs=msa_seqs,count=count)
 
 
 def covalent_bond_convert(items: Mapping[str, Union[int, str]]) -> Entity:
@@ -248,8 +258,81 @@ def covalent_bond_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     dtype = items['type']
     bond = parse_covalent_bond_input(items['bond'])
 
-    return Entity(dtype=dtype, seqs='', msa_seqs=bond)
+    return Entity(dtype=dtype, ccd=[], msa_seqs=bond)
 
+def residue_replacement_convert(items: Mapping[str, Union[int, str]]) -> Entity:
+    """
+        "type": "modres",
+        "modres": "A,74,SER,SEP;"
+    """
+    dtype = items['type']
+    modres= parse_residue_replacement(items['modres'])
+
+    return Entity(dtype=dtype, ccd=[], msa_seqs=modres)
+
+class ListReorder:
+    def __init__(self, ref_original, ref_reordered):
+        # Store the original and reordered reference lists
+        self.ref_original = ref_original
+        self.ref_reordered = ref_reordered
+        
+        # Create a mapping from the original reference list to its indices
+        self.index_map = {element: idx for idx, element in enumerate(ref_original)}
+
+    def reorder(self, query):
+        # Reorder the query list based on the mapping and reordered reference list
+        reordered_query = [query[self.index_map[element]] for element in self.ref_reordered]
+        return reordered_query
+
+def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
+    dtype = items['type']
+
+    NCAA_REQUIRED_ATOMS=['N', 'CA', 'C', 'O', 'OXT']
+    converter=Mol2MolObabel()
+
+    if not 'mol2' in items:
+        raise ValueError("Invalid format for NCAA input, please use MOL2 only.")
+    
+    k='mol2'
+
+    ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
+    
+    mol_wo_h = converter(k, items[k], items.get('use_3d', True))
+    _extra_mol_infos = make_basic_info_fromMol(mol_wo_h, keep_labels=True)
+    atom_ids=_extra_mol_infos.get('atom_ids')
+
+    if not all(atom in atom_ids for atom in NCAA_REQUIRED_ATOMS):
+        raise ValueError(f'Missing Atom(s) on this NCAA {ligand_name}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS},\nwhile this NCAA has: {atom_ids}')
+    
+    sidechain_atom_ids=[atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS]
+
+    reordered_atom_ids= NCAA_REQUIRED_ATOMS[:-1]+ sidechain_atom_ids + ['OXT']
+
+    reordered_extra_mol_infos={}
+
+    reorder=ListReorder(atom_ids, reordered_atom_ids)
+
+    for k,v in _extra_mol_infos.items():
+        if k == 'coval_bonds':
+            v_drop_oxt=[b for b in v if not (('OXT' in b) or ('C' in b and 'O' in b))]
+            v_drop_oxt.append(('C', 'O', 'DOUB',))
+            reordered_extra_mol_infos.update({k:v_drop_oxt})
+            continue
+
+        reordered_extra_mol_infos.update({k:reorder.reorder(v)[:-1]})
+
+
+    leave_atom_flag=['N' if atom != 'OXT' else 'Y' for atom in reordered_atom_ids]
+
+    reordered_extra_mol_infos.update({'leave_atom_flag': leave_atom_flag[:-1]})
+
+    ccd_to_extra_mol_infos = {
+        ligand_name: reordered_extra_mol_infos
+    }
+
+    logging.debug(f'Fixed mol infos for NCAA: {ligand_name}: \n{ccd_to_extra_mol_infos}')
+
+    return Entity(dtype=dtype, ccd=[ligand_name], extra_mol_infos=ccd_to_extra_mol_infos)
 
 def ligand_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     """
@@ -265,7 +348,7 @@ def ligand_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     _ccd_seqs = []
     ccd_to_extra_mol_infos = {}
     if 'ccd' in items:
-        _ccd_seqs.append(f"({items['ccd']})")
+        _ccd_seqs.extend(items['ccd'].split(',')) # for multiple ligand inputs, comma-separated ccd codes
 
     
     elif any(f in items for f in converter.supported_formats):
@@ -273,9 +356,8 @@ def ligand_convert(items: Mapping[str, Union[int, str]]) -> Entity:
             if k in items:
                 break
 
-        ligand_name="UNK-"
-        _ccd_seqs.append(f"({ligand_name})")
-        # mol_wo_h = smiles_to_ETKDGMol(items['smiles'])
+        ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
+        _ccd_seqs.append(ligand_name)
         
         mol_wo_h = converter(k, items[k], items.get('use_3d', True))
         _extra_mol_infos = make_basic_info_fromMol(mol_wo_h)
@@ -284,11 +366,10 @@ def ligand_convert(items: Mapping[str, Union[int, str]]) -> Entity:
         }
     else:
         raise ValueError(f'not support for the {dtype} in ligand_convert, please check the input. \nSupported input: {converter.supported_formats}')
-    ccd_seqs = ''.join(_ccd_seqs) ## (GLY)(ALA).....
+
 
     # repeat_ccds, repeat_fasta = [ccd_seqs], [msa_seqs]
-    return Entity(dtype='ligand', seqs=ccd_seqs,msa_seqs=msa_seqs,count=count,extra_mol_infos=ccd_to_extra_mol_infos)
-
+    return Entity(dtype='ligand', ccd=_ccd_seqs, msa_seqs=msa_seqs,count=count,extra_mol_infos=ccd_to_extra_mol_infos)
 
 
 def entities_rename_and_filter(items):
@@ -296,25 +377,11 @@ def entities_rename_and_filter(items):
         'ion': 'ligand'
     }
     items['type'] = ligand_mapping.get(items['type'], items['type'])
-    if items['type'] not in ALLOWED_ENTITY_TYPE and items['type'] != 'bond':
+
+    PROPERTY_ENTITY_TYPE = ('bond', 'modres', 'ncaa',)
+    if items['type'] not in ALLOWED_ENTITY_TYPE and items['type'] not in PROPERTY_ENTITY_TYPE:
         raise ValueError(f'{items["type"]} is not allowed, will be ignored.')
     return items
-
-
-def modify_name_convert(entities: list[Entity]):
-    cur_idx = 0
-    for entity in entities:
-        # dtype(protein, dna, rna, ligand): no_chains,  msa_seqs, seqs
-
-        ## rename UNK- to UNK-1, 2, 3, 4...
-        extra_mol_infos=copy.deepcopy(entity.extra_mol_infos)
-        for k in extra_mol_infos:
-            user_name_3 = USER_LIG_IDS_3[cur_idx]
-            entity.seqs = entity.seqs.replace('UNK-', user_name_3)
-            entity.extra_mol_infos[user_name_3] = entity.extra_mol_infos.pop('UNK-')
-            cur_idx += 1
-
-    return entities
 
 
 def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
@@ -337,6 +404,10 @@ def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
                 json_obj = ligand_convert(items)
             elif items['type'] == 'bond':
                 json_obj = covalent_bond_convert(items)
+            elif items['type'] == 'modres':
+                json_obj = residue_replacement_convert(items)
+            elif items['type'] == 'ncaa':
+                json_obj = ncaa_convert(items)
             else:
                 json_obj = polymer_convert(items)
             success_entity.append(json_obj)
@@ -351,4 +422,4 @@ def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
     if len(error_ids) > 0:
         raise RuntimeError(f'[Error] Failed to convert {len(error_ids)}/{len(entities)} entities')    
     
-    return modify_name_convert(success_entity)
+    return success_entity

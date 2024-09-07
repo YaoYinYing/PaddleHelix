@@ -4,7 +4,7 @@ import copy
 import os
 from pathlib import Path
 import pickle
-from typing import List, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 import numpy as np
 from absl import logging
@@ -15,7 +15,7 @@ from helixfold.data import parsers
 from helixfold.data.tools import utils
 from helixfold.data import pipeline_multimer, pipeline_multimer_parallel
 from helixfold.data import pipeline_rna_multimer
-from helixfold.data import pipeline_conf_bonds, pipeline_token_feature, pipeline_hybrid
+from helixfold.data import pipeline_conf_bonds, pipeline_token_feature, pipeline_hybrid, pipeline_residue_replacement
 from helixfold.data import label_utils
 
 from helixfold.data.tools import utils
@@ -43,19 +43,19 @@ def crop_msa(feat, max_msa_depth=16384):
 
 
 def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
-  if ccd_id in ccd_preprocessed_dict:
+  _residue_in_ccd_dict=ccd_id in ccd_preprocessed_dict
+  _residue_is_standard=ccd_id in residue_constants.STANDARD_LIST
+
+  if _residue_in_ccd_dict:
     refs = ccd_preprocessed_dict[ccd_id]  # O(1)
-    if ccd_id in residue_constants.STANDARD_LIST:
-      _residue_is_standard = True
+    if _residue_is_standard:
       pdb_atom_ids_list = POLYMER_STANDARD_RESI_ATOMS[ccd_id] # NOTE: now is only support standard residue.
     else:
       # for ligand/ion. ccd_id.
-      _residue_is_standard = False
       pdb_atom_ids_list = refs['atom_ids']
   else:
     # for ligand/ion. smiles.
     assert not extra_feats is None and ccd_id in extra_feats
-    _residue_is_standard = False
     refs = extra_feats[ccd_id]
     pdb_atom_ids_list = refs['atom_ids']
 
@@ -226,7 +226,12 @@ def get_inference_restype_mask(all_chain_features, ccd_preprocessed_dict, extra_
   }
 
 
-def add_assembly_features(all_chain_features: Mapping, ccd_preprocessed_dict: Mapping, no_msa_templ_feats:bool=True, covalent_bonds:Optional[List[pipeline_conf_bonds.CovalentBond]]=None):
+def add_assembly_features(
+  all_chain_features: Mapping, 
+  ccd_preprocessed_dict: Mapping, 
+  no_msa_templ_feats:bool=True, 
+  covalent_bonds:Optional[List[pipeline_conf_bonds.CovalentBond]]=None
+  ):
   '''
     ## NOTE: keep the type and chainID orders.
     all_chain_features: {
@@ -263,6 +268,7 @@ def add_assembly_features(all_chain_features: Mapping, ccd_preprocessed_dict: Ma
       new_order_chain_infos[dtype + '_' + _chaid] = v['ccd_seqs']
       extra_feats_infos.update(v['extra_feats'])
 
+
   total_feats = {}
   ## 1. msa pair_and_merge for protein/rna, use hf2 raw processing.
   for dtype, chain_group_feats in dtype_hf2_feats.items():
@@ -294,7 +300,7 @@ def add_assembly_features(all_chain_features: Mapping, ccd_preprocessed_dict: Ma
   ## 2. make token_seq_feats and conf_bond_feats.
   token_features = pipeline_token_feature.make_sequence_features(all_chain_info=new_order_chain_infos,
                                           ccd_preprocessed_dict=ccd_preprocessed_dict,
-                                          extra_feats=extra_feats_infos)
+                                          extra_feats=extra_feats_infos,)
   
   ## 3. Get reference features and bond features
   ref_features = pipeline_conf_bonds.make_ccd_conf_features(all_chain_info=new_order_chain_infos,
@@ -376,6 +382,14 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
     all_chain_features = {}
     sequence_features = {} 
     num_chains = 0
+
+    # gather all defined residue replacements
+    all_modres: list[pipeline_residue_replacement.ResidueReplacement]=[modres for entity in all_entitys  for modres in entity.msa_seqs if entity.dtype == 'modres' ]
+
+    # gather all defined ncaas:
+    all_ncaas: list[Entity]=[entity for entity in all_entitys if entity.dtype == 'ncaa']
+    all_ncaa_dict: Mapping[str, Any]={k:v for ent in all_ncaas for k,v in ent.extra_mol_infos.items()}
+
     for entity in all_entitys:
       if (dtype:=entity.dtype) not in residue_constants.CHAIN_type_order:
         continue
@@ -389,11 +403,29 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
           all_chain_features[type_chain_id] = copy.deepcopy(sequence_features[entity.seqs])
           continue
         
-        ccd_list = parsers.parse_ccd_fasta(entity.seqs)
+        ccd=entity.ccd
+        chain_modres=[m for m in all_modres if m.chain==chain_id]
+        if chain_modres:
+          logging.info(f'{type_chain_id} has {len(chain_modres)} residue to be replaced')
+          for m in chain_modres:
+            logging.info(str(m))
+          
+          for m in chain_modres:
+            if ccd[m.residue_index-1]!=m.old_residue:
+              logging.warning(f'Mismatch replacement: {type_chain_id} residue {m.residue_index} {m.old_residue} != {ccd[m.residue_index-1]} !!!') 
+            ccd[m.residue_index-1] = m.new_residue
+        
+        extra_mol_infos=entity.extra_mol_infos.copy()
+        if all_ncaa_dict:
+          logging.info(f'Adding NCAAs: {all_ncaa_dict.keys()}')
+          extra_mol_infos.update(all_ncaa_dict)
+        
         chain_features = {'msa_templ_feats': {},
-                          'ccd_seqs': ccd_list, 
+                          'ccd_seqs': ccd, 
                           'msa_seqs': entity.msa_seqs,
-                          'extra_feats': entity.extra_mol_infos}
+                          'extra_feats': extra_mol_infos}
+
+        logging.debug(f'{chain_features=}')
         all_chain_features[type_chain_id] = chain_features
         sequence_features[entity.seqs] = chain_features
       num_chains += entity.count
@@ -453,6 +485,8 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
 
     # gather all defined covalent bonds
     all_covalent_bonds=[bond for entity in all_entitys for bond in entity.msa_seqs if entity.dtype == 'bond']
+    
+    
 
     assert num_chains == len(all_chain_features.keys())
     all_feats = add_assembly_features(all_chain_features, ccd_preprocessed_dict, no_msa_templ_feats, all_covalent_bonds)

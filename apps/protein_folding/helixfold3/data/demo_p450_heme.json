@@ -13,6 +13,7 @@
         {
             "type": "ligand",
             "smiles": "CC1=C2CC[C@@]3(CCCC(=C)[C@H]3C[C@@H](C2(C)C)CC1)C",
+            "name": "tax",
             "count": 1
         }
     ]
