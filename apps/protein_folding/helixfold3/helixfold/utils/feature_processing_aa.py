@@ -4,7 +4,7 @@ import copy
 import os
 from pathlib import Path
 import pickle
-from typing import List, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 import numpy as np
 from absl import logging
@@ -43,6 +43,9 @@ def crop_msa(feat, max_msa_depth=16384):
 
 
 def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
+  _residue_in_ccd_dict=ccd_id in ccd_preprocessed_dict
+  _residue_is_standard=ccd_id in residue_constants.STANDARD_LIST
+
   if ccd_id in ccd_preprocessed_dict:
     refs = ccd_preprocessed_dict[ccd_id]  # O(1)
     if ccd_id in residue_constants.STANDARD_LIST:
@@ -268,6 +271,7 @@ def add_assembly_features(
       new_order_chain_infos[dtype + '_' + _chaid] = v['ccd_seqs']
       extra_feats_infos.update(v['extra_feats'])
 
+
   total_feats = {}
   ## 1. msa pair_and_merge for protein/rna, use hf2 raw processing.
   for dtype, chain_group_feats in dtype_hf2_feats.items():
@@ -385,6 +389,10 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
     # gather all defined residue replacements
     all_modres: list[pipeline_residue_replacement.ResidueReplacement]=[modres for entity in all_entitys  for modres in entity.msa_seqs if entity.dtype == 'modres' ]
 
+    # gather all defined ncaas:
+    all_ncaas: list[Entity]=[entity for entity in all_entitys if entity.dtype == 'ncaa']
+    all_ncaa_dict: Mapping[str, Any]={k:v for ent in all_ncaas for k,v in ent.extra_mol_infos.items()}
+
     for entity in all_entitys:
       if (dtype:=entity.dtype) not in residue_constants.CHAIN_type_order:
         continue
@@ -409,11 +417,16 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
             if ccd[m.residue_index-1]!=m.old_residue:
               logging.warning(f'{type_chain_id} residue {m.residue_index} {m.old_residue} != {ccd[m.residue_index-1]}') 
             ccd[m.residue_index-1] = m.new_residue
-
+        
+        extra_mol_infos=entity.extra_mol_infos.copy()
+        if all_ncaa_dict:
+          logging.info(f'Adding NCAAs: {all_ncaa_dict.keys()}')
+          extra_mol_infos.update(all_ncaa_dict)
+        
         chain_features = {'msa_templ_feats': {},
                           'ccd_seqs': ccd, 
                           'msa_seqs': entity.msa_seqs,
-                          'extra_feats': entity.extra_mol_infos}
+                          'extra_feats': extra_mol_infos}
         all_chain_features[type_chain_id] = chain_features
         sequence_features[entity.seqs] = chain_features
       num_chains += entity.count

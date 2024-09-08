@@ -84,16 +84,21 @@ def digit2alphabet(digit):
     return alphabet
 
 
-def make_basic_info_fromMol(mol: Chem.Mol):
+def make_basic_info_fromMol(mol: Chem.Mol, keep_labels=False):
     ## make basic atom_name to Mol
     _atom_nums_map = collections.defaultdict(int)  # atom_symbol to appear count.
     idx_to_name = {}
     for atom in mol.GetAtoms():
         idx = atom.GetIdx()
-        symbol = atom.GetSymbol()
-        _atom_nums_map[symbol] += 1
-        atom_name = f"{symbol}{_atom_nums_map[symbol]}"
-        atom.SetProp("_TriposAtomName", atom_name)
+        atom_name=atom.GetProp("_TriposAtomName")
+        if keep_labels:
+            logging.debug(f'Keeping atom name as {atom_name}')
+        else:
+            symbol = atom.GetSymbol()
+            _atom_nums_map[symbol] += 1
+            atom_name = f"{symbol}{_atom_nums_map[symbol]}"
+            atom.SetProp("_TriposAtomName", atom_name)
+            logging.debug(f'Rename atom name to {atom_name}')
         idx_to_name[idx] = atom_name
 
     atom_symbol = [atom.GetSymbol() for atom in mol.GetAtoms()]
@@ -208,7 +213,7 @@ class Mol2MolObabel:
 
 @dataclass
 class Entity:
-    dtype: Literal['protein', 'dna', 'rna', 'ligand', 'bond','non_polymer', 'ion', 'modres']
+    dtype: Literal['protein', 'dna', 'rna', 'ligand', 'bond','non_polymer', 'ion', 'modres', 'ncaa']
     ccd: list[str] # CCD code sequence in list
     msa_seqs: Union[str, List[CovalentBond], List[ResidueReplacement]] = ''
     count: int = 1
@@ -265,7 +270,67 @@ def residue_replacement_convert(items: Mapping[str, Union[int, str]]) -> Entity:
 
     return Entity(dtype=dtype, ccd=[], msa_seqs=modres)
 
+class ListReorder:
+    def __init__(self, ref_original, ref_reordered):
+        # Store the original and reordered reference lists
+        self.ref_original = ref_original
+        self.ref_reordered = ref_reordered
+        
+        # Create a mapping from the original reference list to its indices
+        self.index_map = {element: idx for idx, element in enumerate(ref_original)}
 
+    def reorder(self, query):
+        # Reorder the query list based on the mapping and reordered reference list
+        reordered_query = [query[self.index_map[element]] for element in self.ref_reordered]
+        return reordered_query
+
+def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
+    dtype = items['type']
+
+    NCAA_REQUIRED_ATOMS=['N', 'CA', 'C', 'O', 'OXT']
+    converter=Mol2MolObabel()
+
+    if not any(f in items for f in converter.supported_formats):
+        raise ValueError(f"Invalid format for NCAA input, please check the input. \nSupported input: {converter.supported_formats}")
+    
+    for k in converter.supported_formats:
+        if k in items:
+            break
+
+    ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
+    
+    mol_wo_h = converter(k, items[k], items.get('use_3d', True))
+    _extra_mol_infos = make_basic_info_fromMol(mol_wo_h, keep_labels=True)
+    atom_ids=_extra_mol_infos.get('atom_ids')
+
+    if not all(atom in atom_ids for atom in NCAA_REQUIRED_ATOMS):
+        raise ValueError(f'Missing Atom(s) on this NCAA {ligand_name}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS},\nwhile this NCAA has: {atom_ids}')
+    
+    reordered_atom_ids= NCAA_REQUIRED_ATOMS[:-1]+ [atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS] + ['OXT']
+
+    reordered_extra_mol_infos={}
+
+    reorder=ListReorder(atom_ids, reordered_atom_ids)
+
+    for k,v in _extra_mol_infos.items():
+        if k == 'coval_bonds':
+            reordered_extra_mol_infos.update({k:v})
+            continue
+
+        reordered_extra_mol_infos.update({k:reorder.reorder(v)})
+
+
+    leave_atom_flag=['N' if atom != 'OXT' else 'Y' for atom in reordered_atom_ids]
+
+    reordered_extra_mol_infos.update({'leave_atom_flag': leave_atom_flag})
+
+    ccd_to_extra_mol_infos = {
+        ligand_name: reordered_extra_mol_infos
+    }
+
+    logging.debug(f'Fixed mol infos for NCAA: {ligand_name}: \n{ccd_to_extra_mol_infos}')
+
+    return Entity(dtype=dtype, ccd=[ligand_name], extra_mol_infos=ccd_to_extra_mol_infos)
 
 def ligand_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     """
@@ -310,7 +375,9 @@ def entities_rename_and_filter(items):
         'ion': 'ligand'
     }
     items['type'] = ligand_mapping.get(items['type'], items['type'])
-    if items['type'] not in ALLOWED_ENTITY_TYPE and items['type'] != 'bond' and items['type'] != 'modres':
+
+    PROPERTY_ENTITY_TYPE = ('bond', 'modres', 'ncaa',)
+    if items['type'] not in ALLOWED_ENTITY_TYPE and items['type'] not in PROPERTY_ENTITY_TYPE:
         raise ValueError(f'{items["type"]} is not allowed, will be ignored.')
     return items
 
@@ -337,6 +404,8 @@ def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
                 json_obj = covalent_bond_convert(items)
             elif items['type'] == 'modres':
                 json_obj = residue_replacement_convert(items)
+            elif items['type'] == 'ncaa':
+                json_obj = ncaa_convert(items)
             else:
                 json_obj = polymer_convert(items)
             success_entity.append(json_obj)
