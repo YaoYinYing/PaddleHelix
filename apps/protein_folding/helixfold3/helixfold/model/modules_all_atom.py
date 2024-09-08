@@ -44,6 +44,8 @@ from helixfold.model.utils import subbatch, tree_map
 from helixfold.model.utils import get_all_atom_confidence_metrics
 from helixfold.model import modules
 
+from helixfold.data.tools.utils import timing
+
 
 class HelixFold3(nn.Layer):
     """HelixFold-3 all-atom model
@@ -107,11 +109,12 @@ class HelixFold3(nn.Layer):
         }
 
         for recycle_idx in range(1 + num_iter):
-            single_act, pair_act = single_act.detach(), pair_act.detach()
-            single_act, pair_act = self.embeddings_and_pairformer(
-                batch, pair_init_act, pair_act,
-                single_inputs_act, single_init_act, single_act,
-                masks)
+            with timing(f'Recycling #{recycle_idx}'):
+                single_act, pair_act = single_act.detach(), pair_act.detach()
+                single_act, pair_act = self.embeddings_and_pairformer(
+                    batch, pair_init_act, pair_act,
+                    single_inputs_act, single_init_act, single_act,
+                    masks)
 
         representations = {
             'single_inputs': single_inputs_act,

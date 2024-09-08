@@ -191,7 +191,6 @@ def load_to_dev_shm(file_path: str, ramdisk_path: str = "/dev/shm", keep:bool=Fa
     
     return target_path
 
-
 def get_msa_templates_pipeline(cfg: DictConfig) -> Dict:
     use_precomputed_msas = True  # Assuming this is a constant or should be set globally
     
@@ -277,7 +276,7 @@ def ranking_all_predictions(output_dirs):
         rank_id += 1
 
 @paddle.no_grad()
-def evaluate(args, model, batch):
+def evaluate(args, model: RunModel, batch):
     """evaluate a given dataset"""
     model.eval()       
         
@@ -663,21 +662,21 @@ class HelixFoldRunner:
         all_pred_path = []
         for infer_id in range(infer_times):
             
-            logging.info(f'Start {infer_id}-th inference...\n')
-            prediction = evaluate(self.cfg, self.model, feature_dict)
-            
-            # save result
-            prediction = split_prediction(prediction, diff_batch_size)
-            for rank_id in range(diff_batch_size):
-                json_name = job_base + f'-pred-{str(infer_id + 1)}-{str(rank_id + 1)}'
-                output_dir = pathlib.Path(output_dir_base).joinpath(json_name)
-                output_dir.mkdir(parents=True, exist_ok=True)
-                save_result(entry_name=job_base,
-                            feature_dict=feature_dict,
-                            prediction=prediction[rank_id],
-                            output_dir=output_dir, 
-                            maxit_bin=self.cfg.other.maxit_binary)
-                all_pred_path.append(output_dir)
+            with timing(f'{infer_id}-th inference'):
+                prediction = evaluate(self.cfg, self.model, feature_dict)
+                
+                # save result
+                prediction = split_prediction(prediction, diff_batch_size)
+                for rank_id in range(diff_batch_size):
+                    json_name = job_base + f'-pred-{str(infer_id + 1)}-{str(rank_id + 1)}'
+                    output_dir = pathlib.Path(output_dir_base).joinpath(json_name)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    save_result(entry_name=job_base,
+                                feature_dict=feature_dict,
+                                prediction=prediction[rank_id],
+                                output_dir=output_dir, 
+                                maxit_bin=self.cfg.other.maxit_binary)
+                    all_pred_path.append(output_dir)
         
         # final ranking
         print(f'============ Ranking ! ============')
@@ -701,8 +700,6 @@ class HelixFoldRunner:
 def main(cfg: DictConfig):
     
     hf_runner=HelixFoldRunner(cfg=cfg)
-
-
 
     if os.path.isfile(cfg.input):
         logging.info(f'Starting inference on {cfg.input}')

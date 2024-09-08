@@ -46,19 +46,16 @@ def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
   _residue_in_ccd_dict=ccd_id in ccd_preprocessed_dict
   _residue_is_standard=ccd_id in residue_constants.STANDARD_LIST
 
-  if ccd_id in ccd_preprocessed_dict:
+  if _residue_in_ccd_dict:
     refs = ccd_preprocessed_dict[ccd_id]  # O(1)
-    if ccd_id in residue_constants.STANDARD_LIST:
-      _residue_is_standard = True
+    if _residue_is_standard:
       pdb_atom_ids_list = POLYMER_STANDARD_RESI_ATOMS[ccd_id] # NOTE: now is only support standard residue.
     else:
       # for ligand/ion. ccd_id.
-      _residue_is_standard = False
       pdb_atom_ids_list = refs['atom_ids']
   else:
     # for ligand/ion. smiles.
     assert not extra_feats is None and ccd_id in extra_feats
-    _residue_is_standard = False
     refs = extra_feats[ccd_id]
     pdb_atom_ids_list = refs['atom_ids']
 
@@ -415,7 +412,7 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
           
           for m in chain_modres:
             if ccd[m.residue_index-1]!=m.old_residue:
-              logging.warning(f'{type_chain_id} residue {m.residue_index} {m.old_residue} != {ccd[m.residue_index-1]}') 
+              logging.warning(f'Mismatch replacement: {type_chain_id} residue {m.residue_index} {m.old_residue} != {ccd[m.residue_index-1]} !!!') 
             ccd[m.residue_index-1] = m.new_residue
         
         extra_mol_infos=entity.extra_mol_infos.copy()
@@ -427,6 +424,8 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
                           'ccd_seqs': ccd, 
                           'msa_seqs': entity.msa_seqs,
                           'extra_feats': extra_mol_infos}
+
+        logging.debug(f'{chain_features=}')
         all_chain_features[type_chain_id] = chain_features
         sequence_features[entity.seqs] = chain_features
       num_chains += entity.count

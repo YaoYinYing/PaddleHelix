@@ -290,12 +290,10 @@ def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     NCAA_REQUIRED_ATOMS=['N', 'CA', 'C', 'O', 'OXT']
     converter=Mol2MolObabel()
 
-    if not any(f in items for f in converter.supported_formats):
-        raise ValueError(f"Invalid format for NCAA input, please check the input. \nSupported input: {converter.supported_formats}")
+    if not 'mol2' in items:
+        raise ValueError("Invalid format for NCAA input, please use MOL2 only.")
     
-    for k in converter.supported_formats:
-        if k in items:
-            break
+    k='mol2'
 
     ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
     
@@ -306,7 +304,9 @@ def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
     if not all(atom in atom_ids for atom in NCAA_REQUIRED_ATOMS):
         raise ValueError(f'Missing Atom(s) on this NCAA {ligand_name}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS},\nwhile this NCAA has: {atom_ids}')
     
-    reordered_atom_ids= NCAA_REQUIRED_ATOMS[:-1]+ [atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS] + ['OXT']
+    sidechain_atom_ids=[atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS]
+
+    reordered_atom_ids= NCAA_REQUIRED_ATOMS[:-1]+ sidechain_atom_ids + ['OXT']
 
     reordered_extra_mol_infos={}
 
@@ -314,15 +314,17 @@ def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
 
     for k,v in _extra_mol_infos.items():
         if k == 'coval_bonds':
-            reordered_extra_mol_infos.update({k:v})
+            v_drop_oxt=[b for b in v if not (('OXT' in b) or ('C' in b and 'O' in b))]
+            v_drop_oxt.append(('C', 'O', 'DOUB',))
+            reordered_extra_mol_infos.update({k:v_drop_oxt})
             continue
 
-        reordered_extra_mol_infos.update({k:reorder.reorder(v)})
+        reordered_extra_mol_infos.update({k:reorder.reorder(v)[:-1]})
 
 
     leave_atom_flag=['N' if atom != 'OXT' else 'Y' for atom in reordered_atom_ids]
 
-    reordered_extra_mol_infos.update({'leave_atom_flag': leave_atom_flag})
+    reordered_extra_mol_infos.update({'leave_atom_flag': leave_atom_flag[:-1]})
 
     ccd_to_extra_mol_infos = {
         ligand_name: reordered_extra_mol_infos
