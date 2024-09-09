@@ -27,7 +27,7 @@ from helixfold.data.pipeline_conf_bonds import CovalentBond, parse_covalent_bond
 from helixfold.data.pipeline_residue_replacement import ResidueReplacement, parse_residue_replacement
 from helixfold.data.tools import utils
 
-from openbabel import openbabel
+from immutabledict import immutabledict
 
 
 ## NOTE: this mapping is only useful for standard dna/rna/protein sequence input.
@@ -59,7 +59,7 @@ ERROR_CODES = {
     3: 'Unknown error.'
 }
 
-
+NCAA_REQUIRED_ATOMS=['N', 'CA', 'C', 'O', 'OXT']
 
 
 def read_json(path):
@@ -281,54 +281,114 @@ class ListReorder:
 
     def reorder(self, query):
         # Reorder the query list based on the mapping and reordered reference list
+        if (len_q:=len(query)) != (len_r:=len(self.index_map)):
+            raise ValueError(f'Length of query list ({len_q}) does not match the length of reference list ({len_r})')
         reordered_query = [query[self.index_map[element]] for element in self.ref_reordered]
         return reordered_query
 
-def ncaa_convert(items: Mapping[str, Union[int, str]]) -> Entity:
-    dtype = items['type']
-
-    NCAA_REQUIRED_ATOMS=['N', 'CA', 'C', 'O', 'OXT']
-    converter=Mol2MolObabel()
-
-    if not 'mol2' in items:
-        raise ValueError("Invalid format for NCAA input, please use MOL2 only.")
+def is_amino_acid(ncaa_id: str, ncaa_data: Mapping[str, Any])-> bool:
+    if not 'atom_ids' in ncaa_data:
+        #logging.warning(f'Missing atom_ids key in the NCAA data for {ncaa_id}. \nAll keys: {ncaa_data.keys()}')
+        return False
     
-    k='mol2'
+    atom_ids=ncaa_data.get('atom_ids')
+    _is_a_ncaa=all(atom in atom_ids for atom in NCAA_REQUIRED_ATOMS[:-1])
+        #logging.warning(f'Missing Atom(s) on this NCAA {ncaa_id}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS},\nwhile this NCAA has: {atom_ids}')
+    #logging.info(f'{ncaa_id} is recognized as an amino acid.')
+    return _is_a_ncaa
 
-    ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
+def drop_oxt(ncaa_data: Mapping[str, Any]) -> Mapping[str, Any]:
+    """
+    Removes the 'OXT' atom and related information from the NCAA data.
+
+    Parameters:
+    ncaa_data (Mapping[str, Any]): A mapping containing NCAA molecular data, where keys are strings and values are the corresponding molecular information.
+
+    Returns:
+    Mapping[str, Any]: A new mapping with the 'OXT' atom removed from the NCAA molecular data.
+    """
+    # Get the list of atom IDs
+    atom_ids = ncaa_data.get('atom_ids')
+    if not 'OXT' in atom_ids:
+        logging.warning('OXT has already been removed. Skip.')
+        return ncaa_data
     
-    mol_wo_h = converter(k, items[k], items.get('use_3d', True))
-    _extra_mol_infos = make_basic_info_fromMol(mol_wo_h, keep_labels=True)
-    atom_ids=_extra_mol_infos.get('atom_ids')
+    # Filter out required atoms to get sidechain atoms
+    sidechain_atom_ids = [atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS]
 
-    if not all(atom in atom_ids for atom in NCAA_REQUIRED_ATOMS):
-        raise ValueError(f'Missing Atom(s) on this NCAA {ligand_name}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS},\nwhile this NCAA has: {atom_ids}')
-    
-    sidechain_atom_ids=[atom for atom in atom_ids if atom not in NCAA_REQUIRED_ATOMS]
+    # Reorder atom IDs, placing 'OXT' at the end (to be discarded later)
+    reordered_atom_ids = NCAA_REQUIRED_ATOMS[:-1] + sidechain_atom_ids + ['OXT']
 
-    reordered_atom_ids= NCAA_REQUIRED_ATOMS[:-1]+ sidechain_atom_ids + ['OXT']
+    # Initialize a dictionary to hold reordered extra molecular information
+    reordered_extra_mol_infos = {}
 
-    reordered_extra_mol_infos={}
+    # Create a ListReorder instance for reordering based on new atom IDs
+    reorder = ListReorder(atom_ids, reordered_atom_ids)
 
-    reorder=ListReorder(atom_ids, reordered_atom_ids)
+    skip_sorting_kw: list[str]=['id','smiles','raw_string']
 
-    for k,v in _extra_mol_infos.items():
+    # Iterate over items in the input mapping
+    for k, v in ncaa_data.items():
+        # logging.debug(f'Processing {k}: {v}')
+        if k in skip_sorting_kw: 
+            reordered_extra_mol_infos.update({k: v})
+            continue
+        
         if k == 'coval_bonds':
-            v_drop_oxt=[b for b in v if not (('OXT' in b) or ('C' in b and 'O' in b))]
+            # Filter out bonds involving 'OXT' and adjust remaining bonds
+            v_drop_oxt = [b for b in v if not (('OXT' in b) or ('C' in b and 'O' in b))]
             v_drop_oxt.append(('C', 'O', 'DOUB',))
-            reordered_extra_mol_infos.update({k:v_drop_oxt})
+            reordered_extra_mol_infos.update({k: v_drop_oxt})
             continue
 
-        reordered_extra_mol_infos.update({k:reorder.reorder(v)[:-1]})
+        if hasattr(v, 'tolist'):
+            v=v.tolist()
+
+        if (len_v:=len(v)) != (len_r:=len(reorder.ref_original)):
+            raise ValueError(f'Length of {k} ({len_v}) does not match the length of reference list ({len_r})')
+
+        # Reorder the current item's value and exclude 'OXT'
+        reordered_extra_mol_infos.update({k: reorder.reorder(v)[:-1]})
+    
+    # Return the updated mapping without 'OXT'
+    return reordered_extra_mol_infos
 
 
-    leave_atom_flag=['N' if atom != 'OXT' else 'Y' for atom in reordered_atom_ids]
 
-    reordered_extra_mol_infos.update({'leave_atom_flag': leave_atom_flag[:-1]})
+def ncaa_convert(items: Mapping[str, Union[int, str]], ccd_dict: immutabledict[str, Any]) -> Entity:
+    dtype = items['type']
+
+    if 'ccd' in items:
+        ligand_name=items['ccd']
+        if ligand_name not in ccd_dict:
+            raise ValueError(f'{ligand_name} is not recognized as a valid NCAA.')
+    
+        _extra_mol_infos=ccd_dict[ligand_name]
+        ligand_name=ligand_name.lower()
+
+    else:
+        if not 'mol2' in items:
+            raise ValueError("Invalid file format for NCAA input, please use MOL2 only.")
+
+        converter=Mol2MolObabel()
+        k='mol2'
+        ligand_name=items['name'].lower() # use lower case to avoid collisions with CCD codes.
+    
+        mol_wo_h = converter(k, items[k], items.get('use_3d', True))
+        _extra_mol_infos = make_basic_info_fromMol(mol_wo_h, keep_labels=True)
+        
+    
+    if not is_amino_acid(ligand_name, _extra_mol_infos):
+        raise ValueError(f'Missing Atom(s) on this NCAA {ligand_name}. \nAll required atom labels: {NCAA_REQUIRED_ATOMS}.')
+    
+    leave_atom_flag=['N' if atom != 'OXT' else 'Y' for atom in _extra_mol_infos['atom_ids']]
+
+    _extra_mol_infos.update({'leave_atom_flag': leave_atom_flag})
 
     ccd_to_extra_mol_infos = {
-        ligand_name: reordered_extra_mol_infos
+        ligand_name: drop_oxt(_extra_mol_infos)
     }
+    
 
     logging.debug(f'Fixed mol infos for NCAA: {ligand_name}: \n{ccd_to_extra_mol_infos}')
 
@@ -384,7 +444,7 @@ def entities_rename_and_filter(items):
     return items
 
 
-def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
+def online_json_to_entity(json_path: str, out_dir: str, ccd_dict: immutabledict[str, Any])-> list[Entity]:
     obj = read_json(json_path)
     entities = copy.deepcopy(obj['entities'])
 
@@ -407,7 +467,7 @@ def online_json_to_entity(json_path: str, out_dir: str)-> list[Entity]:
             elif items['type'] == 'modres':
                 json_obj = residue_replacement_convert(items)
             elif items['type'] == 'ncaa':
-                json_obj = ncaa_convert(items)
+                json_obj = ncaa_convert(items, ccd_dict)
             else:
                 json_obj = polymer_convert(items)
             success_entity.append(json_obj)

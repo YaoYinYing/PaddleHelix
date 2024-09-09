@@ -9,12 +9,17 @@
         },
         {
             "type": "ncaa",
+            "ccd": "SEP",
+            "_comment": "will be processed to lowercase"
+        },
+        {
+            "type": "ncaa",
             "name": "typ",
             "mol2": "/repo/PaddleHelix/apps/protein_folding/helixfold3/data/typ.mol2"
         },
         {
             "type": "modres",
-            "modres": "A,20,SER,SEP",
+            "modres": "A,20,SER,sep",
             "_note": "Ser20 phosphorylated ubiquitin"
         },
         {
