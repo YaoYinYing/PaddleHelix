@@ -34,6 +34,10 @@ def parse_residue_replacement(modres:str):
         chain, resi, old,new=modrespart
         replacements.append(ResidueReplacement(chain, int(resi), old,new))
     
-    logging.info(f'Added {len(replacements)} Residue Replacements.\n{replacements}')
+    logging.info(f'Added {len(replacements)} Residue Replacements.\n')
+    for rr in replacements:
+        logging.info(str(rr))
     return replacements
 
+
+    

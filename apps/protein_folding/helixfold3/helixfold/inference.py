@@ -94,14 +94,7 @@ def batch_convert(np_array, add_batch=True):
     
     return {**np_type, **other_type}
 
-def preprocess_json_entity(json_path, out_dir):
-    all_entitys = preprocess.online_json_to_entity(json_path, out_dir)
-    if all_entitys is None:
-        raise ValueError("The json file does not contain any valid entity.")
-    else:
-        logging.info("The json file contains %d valid entity.", len(all_entitys))
-    
-    return all_entitys
+
 
 def convert_to_json_compatible(obj):
     if isinstance(obj, np.ndarray):
@@ -602,9 +595,17 @@ class HelixFoldRunner:
         
         if self.cfg.precision == "bf16" and self.cfg.amp_level == "O2":
             raise NotImplementedError("bf16 O2 is not supported yet.")
+    
+    def preprocess_json_entity(self, json_path, out_dir):
+        all_entitys = preprocess.online_json_to_entity(json_path, out_dir, self.ccd_dict)
+        if all_entitys is None:
+            raise ValueError("The json file does not contain any valid entity.")
+        else:
+            logging.info("The json file contains %d valid entity.", len(all_entitys))
         
+        return all_entitys
     def fold(self, entity: str):
-        all_entitys = preprocess_json_entity(entity, self.cfg.output)
+        all_entitys = self.preprocess_json_entity(entity, self.cfg.output)
         
         ### Set seed for reproducibility
         seed = self.cfg.seed

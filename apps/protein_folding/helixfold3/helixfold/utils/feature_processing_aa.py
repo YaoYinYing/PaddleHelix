@@ -4,7 +4,7 @@ import copy
 import os
 from pathlib import Path
 import pickle
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, List, Literal, Mapping, Optional, Tuple
 
 import numpy as np
 from absl import logging
@@ -20,7 +20,7 @@ from helixfold.data import label_utils
 
 from helixfold.data.tools import utils
 
-from .preprocess import Entity, digit2alphabet
+from .preprocess import Entity, digit2alphabet, drop_oxt, is_amino_acid
 
 
 POLYMER_STANDARD_RESI_ATOMS = residue_constants.residue_atoms
@@ -45,7 +45,9 @@ def crop_msa(feat, max_msa_depth=16384):
 def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
   _residue_in_ccd_dict=ccd_id in ccd_preprocessed_dict
   _residue_is_standard=ccd_id in residue_constants.STANDARD_LIST
+  
 
+  #[refs|extra_feats] -> [refs]
   if _residue_in_ccd_dict:
     refs = ccd_preprocessed_dict[ccd_id]  # O(1)
     if _residue_is_standard:
@@ -59,9 +61,12 @@ def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
     refs = extra_feats[ccd_id]
     pdb_atom_ids_list = refs['atom_ids']
 
+  logging.debug(f'{ccd_id=}: {pdb_atom_ids_list=}')
+
   _atom_positions_list = refs['position']
   ## NOTE: map atom_ids to original atom_ids order from ccd; STANDARD_LIST
-  if ccd_id in residue_constants.STANDARD_LIST:
+  if _residue_is_standard:
+      
     ccd_ori_atom_ids_order = refs['atom_ids']
     _new_atom_ids_list = []
     _new_atom_positions_list = []
@@ -425,7 +430,7 @@ def process_input_json(all_entitys: List[Entity], ccd_preprocessed_dict,
                           'msa_seqs': entity.msa_seqs,
                           'extra_feats': extra_mol_infos}
 
-        logging.debug(f'{chain_features=}')
+        #logging.debug(f'{chain_features=}')
         all_chain_features[type_chain_id] = chain_features
         sequence_features[entity.seqs] = chain_features
       num_chains += entity.count

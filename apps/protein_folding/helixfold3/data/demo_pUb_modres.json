@@ -8,8 +8,13 @@
             "_note": "Ub"
         },
         {
+            "type": "ncaa",
+            "ccd": "SEP",
+            "_comment": "will be processed to lowercase"
+        },
+        {
             "type": "modres",
-            "modres": "A,20,SER,SEP",
+            "modres": "A,20,SER,sep",
             "_note": "Ser20 phosphorylated ubiquitin"
         }
     ]
