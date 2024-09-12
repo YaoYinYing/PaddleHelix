@@ -167,7 +167,7 @@ Another example of **covalently modified** input:
 }
 ```
 
-Example input of residue replacements(experimental feature):
+*EXPERIMENTAL* Example input of residue replacements(Non Canonical Amino Acids):
 
 ```json
 {
@@ -180,10 +180,28 @@ Example input of residue replacements(experimental feature):
             "_note": "Ub"
         },
         {
+            "type": "ncaa",
+            "ccd": "SEP",
+            "_comment": "Register `SEP` as `sep`",
+            "_also_a_comment": "All ccd inputs will be processed as lowercase characters to avoid collisions with standard protein residues"
+        },
+        {
+            "type": "ncaa",
+            "name": "typ",
+            "mol2": "/repo/PaddleHelix/apps/protein_folding/helixfold3/data/typ.mol2",
+            "_comment": "Register this mol2 file as `typ`. Only MOL2 files are allowed. for NCAA, one must name all atoms with individual atom labels in the way that used by standard amino acid species"
+        },
+        {
             "type": "modres",
-            "modres": "A,20,SER,SEP",
+            "modres": "A,20,SER,sep",
             "_note": "Ser20 phosphorylated ubiquitin",
-            "_comment": "replace SER on 20 with SEP, phosphoserine"
+            "_comment": "Use `sep` to replace `SER`"
+        },
+        {
+            "type": "modres",
+            "modres": "A,59,TYR,typ",
+            "_note": "all phosphotyrosines, 59",
+            "_comment": "Use `typ` to replace `TYR`"
         }
     ]
 }

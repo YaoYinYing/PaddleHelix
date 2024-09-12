@@ -10,12 +10,14 @@
         {
             "type": "ncaa",
             "ccd": "SEP",
-            "_comment": "will be processed to lowercase"
+            "_comment": "Register `SEP` as `sep`",
+            "_also_a_comment": "All ccd inputs will be processed as lowercase characters to avoid collisions with standard protein residues"
         },
         {
             "type": "modres",
             "modres": "A,20,SER,sep",
-            "_note": "Ser20 phosphorylated ubiquitin"
+            "_note": "Ser20 phosphorylated ubiquitin",
+            "_comment": "Use `sep` to replace `SER`"
         }
     ]
 }

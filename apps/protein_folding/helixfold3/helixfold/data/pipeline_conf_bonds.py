@@ -1,7 +1,7 @@
 """Functions for building the input features (reference ccd features) for the HelixFold model."""
 
 import collections
-from dataclasses import dataclass
+from dataclasses import dataclass,asdict
 import gzip
 import os
 import pickle
@@ -33,42 +33,54 @@ BondType = Literal["covale", "covale_base", "covale_phosphate", "covale_sugar", 
 
 @dataclass(frozen=True)
 class AtomPartner:
-    """
-    Represents one partner atom in a covalent bond.
+  """
+  Represents one partner atom in a covalent bond.
 
-    Attributes:
-        label_asym_id (str): The asymmetry identifier for the partner atom (i.e., chain ID).
-        label_comp_id (str): The component identifier for the partner atom (i.e., residue name).
-        seq_id (str): The sequence identifier for the partner atom (merged label_seq_id and auth_seq_id).
-        label_atom_id (str): The atom identifier for the partner atom (i.e., atom name).
-    """
+  Attributes:
+      chain_id (str): The asymmetry identifier for the partner atom (i.e., chain ID).
+      residue_ccd_id (str): The component identifier for the partner atom (i.e., residue name).
+      residue_id (str): The sequence identifier for the partner atom (merged label_seq_id and auth_seq_id), residue ID.
+      atom_name (str): The atom identifier for the partner atom (i.e., atom name).
+  """
 
-    label_asym_id: str  # Chain ID
-    label_comp_id: str  # Residue name
-    seq_id: str         # Merged sequence ID
-    label_atom_id: str  # Atom name
+  chain_id: str  # Chain ID,label_asym_id
+  residue_ccd_id: str  # Residue name, label_comp_id
+  residue_id: str         # Merged sequence ID, Residue ID
+  atom_name: str  # Atom name
+
+  def __str__(self) -> str:
+    return f'Atom /{self.chain_id}/{self.residue_ccd_id}~{self.residue_id}/{self.atom_name}'
 
 
 @dataclass(frozen=True)
 class CovalentBond:
-    """
-    Represents a covalent bond between two atoms in a molecular structure.
+  """
+  Represents a covalent bond between two atoms in a molecular structure.
 
-    Attributes:
-        atom_1 (AtomPartner): The first partner atom in the bond.
-        atom_2 (AtomPartner): The second partner atom in the bond.
-        bond_type (BondType): The type of the bond.
-        pdbx_dist_value (float): The distance value as defined in the PDBx/mmCIF format.
-    """
+  Attributes:
+      atom_1 (AtomPartner): The first partner atom in the bond.
+      atom_2 (AtomPartner): The second partner atom in the bond.
+      bond_type (BondType): The type of the bond.
+      pdbx_dist_value (float): The distance value as defined in the PDBx/mmCIF format.
+  """
 
-    atom_1: AtomPartner
-    atom_2: AtomPartner
-    bond_type: BondType
-    pdbx_dist_value: float
+  atom_1: AtomPartner
+  atom_2: AtomPartner
+  bond_type: BondType
+  pdbx_dist_value: float
 
-    def __str__(self)-> str:
-       return f'Bond [{self.bond_type}]: /{self.atom_1.label_asym_id}/{self.atom_1.seq_id}/{self.atom_1.label_comp_id}/{self.atom_1.label_atom_id} --- /{self.atom_2.label_asym_id}/{self.atom_2.seq_id}/{self.atom_2.label_comp_id}/{self.atom_2.label_atom_id} | {self.pdbx_dist_value}'
+  def __str__(self)-> str:
+    return f'Bond [{self.bond_type}]: /{self.atom_1.chain_id}/{self.atom_1.residue_id}/{self.atom_1.residue_ccd_id}/{self.atom_1.atom_name} --- /{self.atom_2.chain_id}/{self.atom_2.residue_id}/{self.atom_2.residue_ccd_id}/{self.atom_2.atom_name} | {self.pdbx_dist_value}'
 
+  def has_atom(self, chain_id,  residue_ccd_id,residue_id, atom_name)-> bool:
+    input_atom=AtomPartner(chain_id, residue_ccd_id,residue_id, atom_name)
+    logging.debug(f'Checking {str(input_atom)}')
+
+    has_this_atom=any(str(input_atom)==str(a) for a in [self.atom_1, self.atom_2]) # asdict and raw object comparisons failed.
+    logging.debug('Yes' if has_this_atom else 'No')
+    
+    return has_this_atom
+  
 def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
     """
     Parses a human-readable string into a list of CovalentBond objects.
@@ -99,17 +111,17 @@ def parse_covalent_bond_input(input_string: str) -> List[CovalentBond]:
 
         # Create AtomPartner instances for the two atoms in the bond
         atom_1 = AtomPartner(
-            label_asym_id=bond_parts[0].strip(),
-            label_comp_id=bond_parts[1].strip(),
-            seq_id=bond_parts[2].strip(),
-            label_atom_id=bond_parts[3].strip()
+            chain_id=bond_parts[0].strip(),
+            residue_ccd_id=bond_parts[1].strip(),
+            residue_id=bond_parts[2].strip(),
+            atom_name=bond_parts[3].strip()
         )
 
         atom_2 = AtomPartner(
-            label_asym_id=bond_parts[4].strip(),
-            label_comp_id=bond_parts[5].strip(),
-            seq_id=bond_parts[6].strip(),
-            label_atom_id=bond_parts[7].strip()
+            chain_id=bond_parts[4].strip(),
+            residue_ccd_id=bond_parts[5].strip(),
+            residue_id=bond_parts[6].strip(),
+            atom_name=bond_parts[7].strip()
         )
 
         # Create a CovalentBond instance
@@ -279,12 +291,12 @@ def make_bond_features(covalent_bond: List[CovalentBond], all_chain_info, ccd_pr
   parsed_covalent_bond = []
   for _bond in covalent_bond:
     # Accessing the AtomPartner attributes for both atoms in the covalent bond
-    left_bond_atomid, right_bond_atomid = _bond.atom_1.label_atom_id, _bond.atom_2.label_atom_id
-    left_bond_name, right_bond_name = _bond.atom_1.label_comp_id, _bond.atom_2.label_comp_id
-    left_bond, right_bond = _bond.atom_1.label_asym_id, _bond.atom_2.label_asym_id
+    left_bond_atomid, right_bond_atomid = _bond.atom_1.atom_name, _bond.atom_2.atom_name
+    left_bond_name, right_bond_name = _bond.atom_1.residue_ccd_id, _bond.atom_2.residue_ccd_id
+    left_bond, right_bond = _bond.atom_1.chain_id, _bond.atom_2.chain_id
     
-    left_bond_idx, right_bond_idx = _bond.atom_1.seq_id, _bond.atom_2.seq_id
-    auth_left_idx, auth_right_idx = _bond.atom_1.seq_id, _bond.atom_2.seq_id
+    left_bond_idx, right_bond_idx = _bond.atom_1.residue_id, _bond.atom_2.residue_id
+    auth_left_idx, auth_right_idx = _bond.atom_1.residue_id, _bond.atom_2.residue_id
 
     left_bond_idx = 1 if left_bond_idx == '.' else left_bond_idx
     right_bond_idx = 1 if right_bond_idx == '.' else right_bond_idx

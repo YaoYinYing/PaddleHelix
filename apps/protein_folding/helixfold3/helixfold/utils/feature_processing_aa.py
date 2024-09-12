@@ -42,31 +42,29 @@ def crop_msa(feat, max_msa_depth=16384):
     return msa.astype('int32'), msa_mask, delection_mat
 
 
-def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
-  _residue_in_ccd_dict=ccd_id in ccd_preprocessed_dict
-  _residue_is_standard=ccd_id in residue_constants.STANDARD_LIST
-  
-
-  #[refs|extra_feats] -> [refs]
-  if _residue_in_ccd_dict:
+def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None, is_poly_point=False):
+  if ccd_id in ccd_preprocessed_dict:
     refs = ccd_preprocessed_dict[ccd_id]  # O(1)
-    if _residue_is_standard:
-      pdb_atom_ids_list = POLYMER_STANDARD_RESI_ATOMS[ccd_id] # NOTE: now is only support standard residue.
+    if ccd_id in residue_constants.STANDARD_LIST:
+      _residue_is_standard = True
+      if not is_poly_point:
+        pdb_atom_ids_list = POLYMER_STANDARD_RESI_ATOMS[ccd_id] # NOTE: now is only support standard residue.
+      else:
+        pdb_atom_ids_list = refs['atom_ids']
     else:
       # for ligand/ion. ccd_id.
+      _residue_is_standard = False
       pdb_atom_ids_list = refs['atom_ids']
   else:
     # for ligand/ion. smiles.
     assert not extra_feats is None and ccd_id in extra_feats
+    _residue_is_standard = False
     refs = extra_feats[ccd_id]
     pdb_atom_ids_list = refs['atom_ids']
 
-  logging.debug(f'{ccd_id=}: {pdb_atom_ids_list=}')
-
   _atom_positions_list = refs['position']
   ## NOTE: map atom_ids to original atom_ids order from ccd; STANDARD_LIST
-  if _residue_is_standard:
-      
+  if ccd_id in residue_constants.STANDARD_LIST:
     ccd_ori_atom_ids_order = refs['atom_ids']
     _new_atom_ids_list = []
     _new_atom_positions_list = []
@@ -151,7 +149,7 @@ def get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=None):
 
   return pad_feats
 
-def get_inference_restype_mask(all_chain_features, ccd_preprocessed_dict, extra_feats=None):
+def get_inference_restype_mask(all_chain_features, ccd_preprocessed_dict, extra_feats=None, convalent_bonds:Optional[list[pipeline_conf_bonds.CovalentBond]]=None):
   """
     all_chain_features: <type>_<chain_id>: chain_features, chain_features should has the ccd_seqs
     ccd_preprocessed_dict: preprocessed CCD dict
@@ -174,8 +172,18 @@ def get_inference_restype_mask(all_chain_features, ccd_preprocessed_dict, extra_
   frame_indice_offset = 0
   for type_chain_id, ccd_list in all_chain_features.items():
     dtype, chain_id = type_chain_id.rsplit('_', 1) 
-    for ccd_id in ccd_list:
-      pad_feats = get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=extra_feats)
+    for idx, ccd_id in enumerate(ccd_list):
+      is_poly_point = False
+      if idx == len(ccd_list) - 1 and dtype == 'protein': 
+        is_poly_point = True
+        # if covalent bond exists on protein ends C (isopeptide for example)
+        if convalent_bonds and any(b.has_atom(chain_id=chain_id, residue_ccd_id=ccd_id, residue_id=idx+1, atom_name='C') for b in convalent_bonds):
+          is_poly_point = False
+          logging.warning(f'Atom /{chain_id}/{ccd_id}~{idx+1}/C is envolved in a bond. ') 
+      elif idx == 0 and dtype in ['rna', 'dna']:
+        is_poly_point = True
+      pad_feats = get_padding_restype(ccd_id, ccd_preprocessed_dict, extra_feats=extra_feats, 
+                                        is_poly_point=is_poly_point)
       pad_feats['ai_indice'] = pad_feats['ai_indice'] + frame_indice_offset
       pad_feats['bi_indice'] = pad_feats['bi_indice'] + frame_indice_offset
       pad_feats['ci_indice'] = pad_feats['ci_indice'] + frame_indice_offset
@@ -328,7 +336,7 @@ def add_assembly_features(
   np_example["msa"], np_example['msa_mask'], np_example['deletion_matrix'] = crop_msa(np_example)
   
   ## 5. get inference pos mask:
-  label = get_inference_restype_mask(new_order_chain_infos, ccd_preprocessed_dict, extra_feats_infos)
+  label = get_inference_restype_mask(new_order_chain_infos, ccd_preprocessed_dict, extra_feats_infos, covalent_bonds)
 
   return {"feats": np_example,
           "label": label,}
